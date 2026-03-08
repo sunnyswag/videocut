@@ -1,0 +1,5 @@
+output/
+.cursor/skills/videocut-skills/.env
+.cursor/skills/videocut-skills/.git/
+*.mp4
+*.mp3
