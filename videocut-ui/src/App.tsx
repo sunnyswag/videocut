@@ -1,16 +1,23 @@
 import { useReviewState } from './hooks/useReviewState';
+import { useTheme } from './hooks/useTheme';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { ProjectTabs } from './components/ProjectTabs';
 import { ControlsBar } from './components/ControlsBar';
 import { WordTimeline } from './components/WordTimeline';
+import { ThemeToggle } from './components/ThemeToggle';
+import './style.css';
 
 function App() {
   const state = useReviewState();
+  useTheme();
 
   return (
     <div>
       <LoadingOverlay loading={state.loading} progressPercent={state.progressPercent} progressText={state.progressText} />
-      <h1>审核稿</h1>
+      <div className="header">
+        <h1>审核稿</h1>
+        <ThemeToggle />
+      </div>
       <ProjectTabs projects={state.projects} currentProjectId={state.currentProjectId} errorText={state.errorText} onSelect={state.setCurrentProjectId} />
       <ControlsBar
         videoRef={state.videoRef}
