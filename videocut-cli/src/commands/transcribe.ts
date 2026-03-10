@@ -37,16 +37,15 @@ export async function transcribe(
   const audioUrl = audioUrlMatch[0];
   console.log(`✅ 音频URL: ${audioUrl}`);
 
-  const appId = process.env.VOLCENGINE_APP_ID;
   const accessToken = process.env.VOLCENGINE_ACCESS_TOKEN;
-  if (!appId || !accessToken) {
-    console.error('❌ 请设置环境变量 VOLCENGINE_APP_ID 和 VOLCENGINE_ACCESS_TOKEN');
+  if (!accessToken) {
+    console.error('❌ 请设置环境变量 VOLCENGINE_ACCESS_TOKEN');
     process.exit(1);
   }
 
   console.log('🎤 调用火山引擎转录...');
   const requestBody = {
-    app: { appid: appId, cluster: 'volcengine_streaming_common' },
+    app: { appid: 'videocut', cluster: 'volcengine_streaming_common' },
     user: { uid: 'videocut' },
     audio: { url: audioUrl, format: 'mp3' },
     request: {
