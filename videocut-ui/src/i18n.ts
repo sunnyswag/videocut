@@ -5,6 +5,10 @@ export type Locale = 'zh' | 'en';
 
 export interface Translations {
   review: string;
+  batchExport: string;
+  currentTab: string;
+  mergeExecute: string;
+  mergeProjectCount: string;
   playPause: string;
   selected: string;
   segments: string;
@@ -36,27 +40,37 @@ export interface Translations {
   estimatedTime: string;
   clickToStart: string;
   confirmCutTitle: string;
+  confirmMergeTitle: string;
   cutDone: string;
+  mergeDone: string;
   output: string;
   subtitleOutputLabel: string;
   originalDuration: string;
   newDuration: string;
   deleted: string;
   cutFailed: string;
+  mergeFailed: string;
   requestFailed: string;
   ensureServer: string;
   copiedSegments: string;
   formatMin: string;
   formatSec: string;
   estimateRemain: string;
+  dialogConfirm: string;
+  dialogCancel: string;
+  dialogClose: string;
 }
 
 const zh: Translations = {
   review: '审核',
+  batchExport: '批量导出',
+  currentTab: '当前 Tab',
+  mergeExecute: '导出',
+  mergeProjectCount: '参与项目',
   playPause: '播放/暂停',
   selected: '',
   segments: '段待删除',
-  burnSubtitle: '烧录字幕',
+  burnSubtitle: '字幕',
   resetDefault: '恢复默认',
   executeCut: '执行剪辑',
   instructions: '操作说明',
@@ -84,27 +98,37 @@ const zh: Translations = {
   estimatedTime: '预计耗时',
   clickToStart: '点击确定开始',
   confirmCutTitle: '确认执行剪辑？',
+  confirmMergeTitle: '确认合并导出？',
   cutDone: '剪辑完成！',
+  mergeDone: '合并导出完成！',
   output: '输出',
   subtitleOutputLabel: '字幕输出',
   originalDuration: '原时长',
   newDuration: '新时长',
   deleted: '删减',
   cutFailed: '剪辑失败',
+  mergeFailed: '合并导出失败',
   requestFailed: '请求失败',
   ensureServer: '请确保使用 videocut review-server 启动服务',
   copiedSegments: '个删除片段已复制到剪贴板',
   formatMin: '分',
   formatSec: '秒',
   estimateRemain: '预估剩余',
+  dialogConfirm: '确认',
+  dialogCancel: '取消',
+  dialogClose: '知道了',
 };
 
 const en: Translations = {
   review: 'Review',
+  batchExport: 'Batch Export',
+  currentTab: 'Current Tab',
+  mergeExecute: 'Export',
+  mergeProjectCount: 'Projects',
   playPause: 'Play / Pause',
   selected: '',
   segments: 'segment(s) to delete',
-  burnSubtitle: 'Burn Subtitle',
+  burnSubtitle: 'Subtitle',
   resetDefault: 'Reset',
   executeCut: 'Execute Cut',
   instructions: 'Help',
@@ -132,19 +156,25 @@ const en: Translations = {
   estimatedTime: 'Estimated time',
   clickToStart: 'Click OK to start',
   confirmCutTitle: 'Confirm cut?',
+  confirmMergeTitle: 'Confirm merge export?',
   cutDone: 'Cut complete!',
+  mergeDone: 'Merge export complete!',
   output: 'Output',
   subtitleOutputLabel: 'Subtitle output',
   originalDuration: 'Original',
   newDuration: 'New',
   deleted: 'Deleted',
   cutFailed: 'Cut failed',
+  mergeFailed: 'Merge export failed',
   requestFailed: 'Request failed',
   ensureServer: 'Make sure videocut review-server is running',
   copiedSegments: 'delete segment(s) copied to clipboard',
   formatMin: 'm',
   formatSec: 's',
   estimateRemain: 'Estimated remaining',
+  dialogConfirm: 'Confirm',
+  dialogCancel: 'Cancel',
+  dialogClose: 'Close',
 };
 
 const locales: Record<Locale, Translations> = { zh, en };

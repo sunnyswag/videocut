@@ -30,3 +30,16 @@ export async function executeCut(
   });
   return res.json();
 }
+
+export async function executeMergeCut(
+  projectIds: string[],
+  deleteMap: Record<string, Array<{ start: number; end: number }>>,
+  burnSubtitle: boolean = false
+): Promise<CutResult> {
+  const res = await fetch(`${API_BASE}/merge-cut`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectIds, deleteMap, burnSubtitle }),
+  });
+  return res.json();
+}

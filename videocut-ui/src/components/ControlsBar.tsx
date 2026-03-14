@@ -7,15 +7,30 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 6.5v11l9-5.5-9-5.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="7" y="6.5" width="3.5" height="11" rx="1" fill="currentColor" />
+      <rect x="13.5" y="6.5" width="3.5" height="11" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 interface ControlsBarProps {
   videoRef: React.RefObject<HTMLVideoElement>;
   currentTime: number;
   duration: number;
+  isPlaying: boolean;
   onPlayPause: () => void;
-  onExecuteCut: () => void;
   onResetToDefault: () => void;
-  burnSubtitle: boolean;
-  onBurnSubtitleChange: (value: boolean) => void;
   selectedCount: number;
   selectedDuration: number;
 }
@@ -24,11 +39,9 @@ export function ControlsBar({
   videoRef,
   currentTime,
   duration,
+  isPlaying,
   onPlayPause,
-  onExecuteCut,
   onResetToDefault,
-  burnSubtitle,
-  onBurnSubtitleChange,
   selectedCount,
   selectedDuration,
 }: ControlsBarProps) {
@@ -37,7 +50,9 @@ export function ControlsBar({
   return (
     <div className="toolbar">
       <div className="toolbar-group">
-        <button className="btn-icon" onClick={onPlayPause} title={t.playPause}>▶︎</button>
+        <button className="btn-icon" onClick={onPlayPause} title={t.playPause}>
+          {isPlaying ? <PauseIcon /> : <PlayIcon />}
+        </button>
         <select
           className="speed-select"
           defaultValue="1"
@@ -66,36 +81,8 @@ export function ControlsBar({
       </div>
 
       <div className="toolbar-group">
-        <label className="burn-label">
-          <input
-            type="checkbox"
-            checked={burnSubtitle}
-            onChange={(e) => onBurnSubtitleChange(e.target.checked)}
-          />
-          {t.burnSubtitle}
-        </label>
         <button className="btn-ghost" onClick={onResetToDefault}>{t.resetDefault}</button>
-        <button className="btn-execute" onClick={onExecuteCut}>{t.executeCut}</button>
       </div>
-
-      <details className="help">
-        <summary>{t.instructions}</summary>
-        <div className="help-content">
-          <span><b>{t.helpClick}</b> {t.helpJumpPlay}</span>
-          <span className="help-sep">·</span>
-          <span><b>{t.helpDblClick}</b> {t.helpSelectToggle}</span>
-          <span className="help-sep">·</span>
-          <span><b>{t.helpShiftDrag}</b> {t.helpBatch}</span>
-          <span className="help-sep">·</span>
-          <span><b>{t.helpSpace}</b> {t.playPause}</span>
-          <span className="help-sep">·</span>
-          <span><b>{t.helpArrows}</b> {t.helpJump}</span>
-          <span className="help-sep">·</span>
-          <span className="color-warning">●</span> {t.aiPreselect}
-          <span className="help-sep">·</span>
-          <span className="color-danger">●</span> {t.confirmedDelete}
-        </div>
-      </details>
     </div>
   );
 }

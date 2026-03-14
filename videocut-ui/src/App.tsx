@@ -2,7 +2,8 @@ import { useReviewState } from './hooks/useReviewState';
 import { useTheme } from './hooks/useTheme';
 import { useLocale } from './i18n';
 import { LoadingOverlay } from './components/LoadingOverlay';
-import { ProjectTabs } from './components/ProjectTabs';
+import { ExportDialog } from './components/ExportDialog';
+import { BatchExportPanel } from './components/BatchExportPanel';
 import { ControlsBar } from './components/ControlsBar';
 import { WordTimeline } from './components/WordTimeline';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -16,7 +17,13 @@ function App() {
 
   return (
     <div className="app">
-      <LoadingOverlay loading={state.loading} progressPercent={state.progressPercent} progressText={state.progressText} />
+      <LoadingOverlay
+        loading={state.loading}
+        progressPercent={state.progressPercent}
+        progressPercentLabel={state.progressPercentLabel}
+        progressText={state.progressText}
+      />
+      <ExportDialog dialog={state.exportDialog} onConfirm={state.handleDialogConfirm} onCancel={state.handleDialogCancel} />
 
       <header className="header">
         <div className="header-left">
@@ -30,27 +37,66 @@ function App() {
       </header>
 
       {state.projects.length > 1 && (
-        <ProjectTabs projects={state.projects} currentProjectId={state.currentProjectId} errorText={state.errorText} onSelect={state.setCurrentProjectId} />
+        <BatchExportPanel
+          projects={state.projects}
+          currentProjectId={state.currentProjectId}
+          orderedProjectIds={state.orderedProjectIds}
+          includedProjectIds={state.includedProjectIds}
+          stateByProject={state.stateByProject}
+          burnSubtitle={state.burnSubtitle}
+          onBurnSubtitleChange={state.setBurnSubtitle}
+          onSelectProject={state.setCurrentProjectId}
+          onToggleInclude={state.toggleIncludeProject}
+          onReorderProject={state.reorderProject}
+          onExecuteMergeCut={state.handleExecuteMergeCut}
+        />
       )}
 
       <div className="video-section">
-        <video id="videoPlayer" ref={state.videoRef} preload="auto" onTimeUpdate={state.handleVideoTimeUpdate}></video>
+        {state.projects.map((project) => (
+          <video
+            key={project.id}
+            ref={(element) => state.registerVideoElement(project.id, element)}
+            className={`video-player ${project.id === state.currentProjectId ? 'active' : ''}`.trim()}
+            preload="auto"
+            playsInline
+            onTimeUpdate={() => state.handleVideoTimeUpdate(project.id)}
+          />
+        ))}
       </div>
 
       <ControlsBar
         currentTime={state.currentTime}
         duration={state.duration}
+        isPlaying={state.isPlaying}
         videoRef={state.videoRef}
         onPlayPause={state.handlePlayPause}
-        onExecuteCut={state.handleExecuteCut}
         onResetToDefault={state.handleResetToDefault}
-        burnSubtitle={state.burnSubtitle}
-        onBurnSubtitleChange={state.setBurnSubtitle}
         selectedCount={state.selected.size}
         selectedDuration={state.selectedDuration}
       />
 
       <div className="timeline-card">
+        <div className="timeline-help">
+          <button className="help-toggle" type="button">
+            {t.instructions}
+          </button>
+          <div className="help-content help-popover">
+            <span><b>{t.helpClick}</b> {t.helpJumpPlay}</span>
+            <span className="help-sep">·</span>
+            <span><b>{t.helpDblClick}</b> {t.helpSelectToggle}</span>
+            <span className="help-sep">·</span>
+            <span><b>{t.helpShiftDrag}</b> {t.helpBatch}</span>
+            <span className="help-sep">·</span>
+            <span><b>{t.helpSpace}</b> {t.playPause}</span>
+            <span className="help-sep">·</span>
+            <span><b>{t.helpArrows}</b> {t.helpJump}</span>
+            <span className="help-sep">·</span>
+            <span className="color-warning">●</span> {t.aiPreselect}
+            <span className="help-sep">·</span>
+            <span className="color-danger">●</span> {t.confirmedDelete}
+          </div>
+        </div>
         <WordTimeline
           words={state.words}
           selected={state.selected}

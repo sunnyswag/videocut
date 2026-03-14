@@ -12,6 +12,19 @@ interface Encoder {
   label: string;
 }
 
+function canUseEncoder(enc: Encoder): boolean {
+  const testCmd = enc.name === 'h264_vaapi'
+    ? `ffmpeg -y -f lavfi -i testsrc=size=128x128:rate=1 -t 1 -vf "format=nv12,hwupload" -vaapi_device /dev/dri/renderD128 -c:v ${enc.name} ${enc.args} -f null -`
+    : `ffmpeg -y -f lavfi -i testsrc=size=128x128:rate=1 -t 1 -c:v ${enc.name} ${enc.args} -f null -`;
+
+  try {
+    execSync(testCmd, { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function detectEncoder(): Encoder {
   const platform = process.platform;
   const encoders: Encoder[] = [];
@@ -19,19 +32,30 @@ function detectEncoder(): Encoder {
   if (platform === 'darwin') {
     encoders.push({ name: 'h264_videotoolbox', args: '-q:v 60', label: 'VideoToolbox (macOS)' });
   } else if (platform === 'win32') {
-    encoders.push({ name: 'h264_nvenc', args: '-preset p4 -cq 20', label: 'NVENC (NVIDIA)' });
+    encoders.push({ name: 'h264_nvenc', args: '-gpu 0 -preset p4 -cq 20', label: 'NVENC (NVIDIA)' });
     encoders.push({ name: 'h264_qsv', args: '-global_quality 20', label: 'QSV (Intel)' });
     encoders.push({ name: 'h264_amf', args: '-quality balanced', label: 'AMF (AMD)' });
   } else {
-    encoders.push({ name: 'h264_nvenc', args: '-preset p4 -cq 20', label: 'NVENC (NVIDIA)' });
+    encoders.push({ name: 'h264_nvenc', args: '-gpu 0 -preset p4 -cq 20', label: 'NVENC (NVIDIA)' });
     encoders.push({ name: 'h264_vaapi', args: '-qp 20', label: 'VAAPI (Linux)' });
   }
 
   encoders.push({ name: 'libx264', args: '-preset fast -crf 18', label: 'x264 (软件)' });
 
+  let encoderList = '';
+  try {
+    encoderList = execSync('ffmpeg -hide_banner -encoders', { stdio: 'pipe' }).toString();
+  } catch {
+    encoderList = '';
+  }
+
   for (const enc of encoders) {
     try {
-      execSync(`ffmpeg -hide_banner -encoders 2>/dev/null | grep ${enc.name}`, { stdio: 'pipe' });
+      if (!encoderList.includes(enc.name)) continue;
+      if (!canUseEncoder(enc)) {
+        console.log(`⚠️ 编码器存在但不可用，跳过: ${enc.label}`);
+        continue;
+      }
       console.log(`🎯 检测到编码器: ${enc.label}`);
       return enc;
     } catch {
@@ -47,6 +71,10 @@ let cachedEncoder: Encoder | null = null;
 function getEncoder(): Encoder {
   if (!cachedEncoder) cachedEncoder = detectEncoder();
   return cachedEncoder;
+}
+
+export function getPreferredEncoder(): { name: string; args: string; label: string } {
+  return getEncoder();
 }
 
 function getAudioOffset(projectPath: string | undefined): number {
@@ -91,6 +119,21 @@ interface CutPlan {
   crossfadeSec: number;
   mergedDelete: DeleteSegment[];
   keepSegments: DeleteSegment[];
+}
+
+interface MergeProjectInput {
+  projectId: string;
+  inputPath: string;
+  deleteList: DeleteSegment[];
+  projectPath?: string;
+}
+
+interface MergeCutResult {
+  outputPath: string;
+  originalDuration: number;
+  newDuration: number;
+  projectCount: number;
+  segmentCount: number;
 }
 
 export function computeCutPlan(
@@ -156,6 +199,27 @@ function buildFilterComplex(keepSegments: DeleteSegment[], crossfadeSec: number)
   return filters.join(';');
 }
 
+function concatRenderedFiles(partFiles: string[], outputPath: string, tmpDir: string): void {
+  if (partFiles.length === 0) {
+    throw new Error('没有可合并的片段');
+  }
+
+  if (partFiles.length === 1) {
+    fs.copyFileSync(partFiles[0], outputPath);
+    console.log(`✅ 输出: ${outputPath}`);
+    return;
+  }
+
+  const listFile = path.join(tmpDir, 'list.txt');
+  const listContent = partFiles.map((f) => `file '${path.resolve(f)}'`).join('\n');
+  fs.writeFileSync(listFile, listContent);
+
+  const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${listFile}" -c copy "${outputPath}"`;
+  console.log('合并片段...');
+  execSync(concatCmd, { stdio: 'pipe' });
+  console.log(`✅ 输出: ${outputPath}`);
+}
+
 function executeFFmpegCutFallback(
   inputPath: string,
   keepSegments: DeleteSegment[],
@@ -176,16 +240,34 @@ function executeFFmpegCutFallback(
       partFiles.push(partFile);
     });
 
-    const listFile = path.join(tmpDir, 'list.txt');
-    const listContent = partFiles.map((f) => `file '${path.resolve(f)}'`).join('\n');
-    fs.writeFileSync(listFile, listContent);
-
-    const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${listFile}" -c copy "${outputPath}"`;
-    console.log('合并片段...');
-    execSync(concatCmd, { stdio: 'pipe' });
-    console.log(`✅ 输出: ${outputPath}`);
+    concatRenderedFiles(partFiles, outputPath, tmpDir);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+export function renderKeepSegments(
+  inputPath: string,
+  keepSegments: DeleteSegment[],
+  outputPath: string,
+  crossfadeSec: number = CROSSFADE_MS / 1000
+): void {
+  if (!Array.isArray(keepSegments) || keepSegments.length === 0) {
+    throw new Error('keepSegments 不能为空');
+  }
+
+  const filterComplex = buildFilterComplex(keepSegments, crossfadeSec);
+  const encoder = getEncoder();
+  console.log(`✂️ 执行 FFmpeg 精确剪辑（${encoder.label}）...`);
+
+  const cmd = `ffmpeg -y -i "file:${inputPath}" -filter_complex "${filterComplex}" -map "[outv]" -map "[outa]" -c:v ${encoder.name} ${encoder.args} -c:a aac -b:a 192k "file:${outputPath}"`;
+
+  try {
+    execSync(cmd, { stdio: 'pipe' });
+    console.log(`✅ 输出: ${outputPath}`);
+  } catch {
+    console.error('FFmpeg 执行失败，尝试分段方案...');
+    executeFFmpegCutFallback(inputPath, keepSegments, outputPath);
   }
 }
 
@@ -206,20 +288,7 @@ export function cutVideo(
 
   console.log(`⚙️ 优化参数: 扩展范围=${BUFFER_MS}ms, 音频crossfade=${CROSSFADE_MS}ms`);
   console.log(`保留 ${plan.keepSegments.length} 个片段，删除 ${plan.mergedDelete.length} 个片段`);
-
-  const filterComplex = buildFilterComplex(plan.keepSegments, plan.crossfadeSec);
-  const encoder = getEncoder();
-  console.log(`✂️ 执行 FFmpeg 精确剪辑（${encoder.label}）...`);
-
-  const cmd = `ffmpeg -y -i "file:${inputPath}" -filter_complex "${filterComplex}" -map "[outv]" -map "[outa]" -c:v ${encoder.name} ${encoder.args} -c:a aac -b:a 192k "file:${outputPath}"`;
-
-  try {
-    execSync(cmd, { stdio: 'pipe' });
-    console.log(`✅ 输出: ${outputPath}`);
-  } catch {
-    console.error('FFmpeg 执行失败，尝试分段方案...');
-    executeFFmpegCutFallback(inputPath, plan.keepSegments, outputPath);
-  }
+  renderKeepSegments(inputPath, plan.keepSegments, outputPath, plan.crossfadeSec);
 
   const newDuration = getVideoDuration(outputPath);
   console.log(`📹 新时长: ${newDuration.toFixed(2)}s`);
@@ -232,4 +301,47 @@ export function cutVideo(
     originalDuration: plan.duration,
     newDuration,
   };
+}
+
+export function mergeProjectVideos(projects: MergeProjectInput[], outputPath: string): MergeCutResult {
+  if (!Array.isArray(projects) || projects.length === 0) {
+    throw new Error('projects 不能为空');
+  }
+
+  const outputDir = path.dirname(outputPath);
+  fs.mkdirSync(outputDir, { recursive: true });
+  const tmpDir = path.join(outputDir, `.tmp_merge_${Date.now()}`);
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  let totalOriginalDuration = 0;
+  const renderedFiles: string[] = [];
+
+  try {
+    projects.forEach((project, index) => {
+      const plan = computeCutPlan(project.inputPath, project.deleteList, project.projectPath);
+      totalOriginalDuration += plan.duration;
+      if (plan.keepSegments.length === 0) {
+        console.log(`⏭️ 跳过空项目: ${project.projectId}`);
+        return;
+      }
+
+      const renderedPath = path.join(tmpDir, `project_${index.toString().padStart(2, '0')}.mp4`);
+      console.log(`\n📦 渲染项目 ${index + 1}/${projects.length}: ${project.projectId}`);
+      console.log(`保留 ${plan.keepSegments.length} 个片段，删除 ${plan.mergedDelete.length} 个片段`);
+      renderKeepSegments(project.inputPath, plan.keepSegments, renderedPath, plan.crossfadeSec);
+      renderedFiles.push(renderedPath);
+    });
+
+    concatRenderedFiles(renderedFiles, outputPath, tmpDir);
+    const newDuration = getVideoDuration(outputPath);
+    return {
+      outputPath,
+      originalDuration: totalOriginalDuration,
+      newDuration,
+      projectCount: projects.length,
+      segmentCount: renderedFiles.length,
+    };
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 }

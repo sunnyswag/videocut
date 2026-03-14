@@ -1,5 +1,71 @@
+import fs from 'fs';
+import path from 'path';
 import { execSync } from 'child_process';
 import type { Utterance, DeleteSegment, Subtitle } from './types.js';
+import { getPreferredEncoder } from './video.js';
+
+interface SubtitleFont {
+  family: string;
+  file?: string;
+  fontsDir?: string;
+}
+
+function isWsl(): boolean {
+  if (process.platform !== 'linux') return false;
+  return fs.existsSync('/mnt/c/Windows/Fonts');
+}
+
+function escapeFilterValue(value: string): string {
+  return value
+    .replace(/\\/g, '/')
+    .replace(/:/g, '\\:')
+    .replace(/'/g, "\\'");
+}
+
+function resolveSubtitleFont(): SubtitleFont {
+  const envFontFile = process.env.VIDEOCUT_SUBTITLE_FONT_FILE;
+  if (envFontFile && fs.existsSync(envFontFile)) {
+    return {
+      family: process.env.VIDEOCUT_SUBTITLE_FONT_NAME || path.basename(envFontFile, path.extname(envFontFile)),
+      file: envFontFile,
+      fontsDir: path.dirname(envFontFile),
+    };
+  }
+
+  let candidates: SubtitleFont[];
+  if (process.platform === 'darwin') {
+    candidates = [
+      { family: 'PingFang SC' },
+      { family: 'Hiragino Sans GB' },
+      { family: 'STHeiti' },
+      { family: 'Arial Unicode MS' },
+    ];
+  } else if (isWsl()) {
+    candidates = [
+      { family: 'Noto Sans SC', file: '/mnt/c/Windows/Fonts/NotoSansSC-VF.ttf', fontsDir: '/mnt/c/Windows/Fonts' },
+      { family: 'Microsoft YaHei', file: '/mnt/c/Windows/Fonts/msyh.ttc', fontsDir: '/mnt/c/Windows/Fonts' },
+      { family: 'Microsoft YaHei', file: '/mnt/c/Windows/Fonts/msyhbd.ttc', fontsDir: '/mnt/c/Windows/Fonts' },
+      { family: 'SimHei', file: '/mnt/c/Windows/Fonts/simhei.ttf', fontsDir: '/mnt/c/Windows/Fonts' },
+      { family: 'SimSun', file: '/mnt/c/Windows/Fonts/simsun.ttc', fontsDir: '/mnt/c/Windows/Fonts' },
+      { family: 'PingFang SC' },
+    ];
+  } else {
+    candidates = [
+      { family: 'Noto Sans SC' },
+      { family: 'Source Han Sans SC' },
+      { family: 'WenQuanYi Zen Hei' },
+      { family: 'PingFang SC' },
+    ];
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate.file || fs.existsSync(candidate.file)) {
+      return candidate;
+    }
+  }
+
+  return { family: 'sans-serif' };
+}
 
 export function formatSrtTime(seconds: number): string {
   const safe = Math.max(0, Number(seconds) || 0);
@@ -91,11 +157,19 @@ export function buildSubtitlesFromEditedOpted(
 }
 
 export function burnSubtitles(videoPath: string, srtPath: string, outputPath: string): void {
-  const escapedSrtPath = srtPath
-    .replace(/\\/g, '/')
-    .replace(/:/g, '\\:')
-    .replace(/'/g, "\\'");
-  const filter = `subtitles='${escapedSrtPath}':force_style='FontSize=22,FontName=PingFang SC,Bold=1,PrimaryColour=&H0000deff,OutlineColour=&H00000000,Outline=2,Alignment=2,MarginV=30'`;
-  const cmd = `ffmpeg -y -i "file:${videoPath}" -vf "${filter}" -c:a copy "file:${outputPath}"`;
-  execSync(cmd, { stdio: 'pipe' });
+  const encoder = getPreferredEncoder();
+  const font = resolveSubtitleFont();
+  const escapedSrtPath = escapeFilterValue(srtPath);
+  const escapedFontsDir = font.fontsDir ? escapeFilterValue(font.fontsDir) : null;
+  const style = `FontSize=22,FontName=${font.family},Bold=700,Spacing=0.8,PrimaryColour=&H00FFFFFF,OutlineColour=&H00606060,Outline=1,BorderStyle=1,Alignment=2,MarginV=22`;
+  const filterParts = [`subtitles='${escapedSrtPath}'`, 'charenc=UTF-8'];
+  if (escapedFontsDir) {
+    filterParts.push(`fontsdir='${escapedFontsDir}'`);
+  }
+  filterParts.push(`force_style='${style}'`);
+  const filter = filterParts.join(':');
+  console.log(`📝 烧录字幕使用编码器: ${encoder.label}`);
+  console.log(`🔤 烧录字幕使用字体: ${font.family}${font.file ? ` (${font.file})` : ''}`);
+  const cmd = `ffmpeg -y -i "file:${videoPath}" -vf "${filter}" -c:v ${encoder.name} ${encoder.args} -c:a copy "file:${outputPath}"`;
+  execSync(cmd, { stdio: 'pipe', maxBuffer: 1024 * 1024 * 16 });
 }

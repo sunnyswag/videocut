@@ -18,14 +18,11 @@ export interface CutResult {
   success: boolean;
   output?: string;
   subtitleOutput?: string;
-  srtPath?: string;
-  editsPath?: string;
-  deletePath?: string;
   originalDuration?: string;
   newDuration?: string;
   deletedDuration?: string;
   savedPercent?: string;
-  message?: string;
+  projectCount?: number;
   error?: string;
 }
 
@@ -34,5 +31,4 @@ export interface ProjectState {
   initialAutoSelected: Set<number>;
   autoSelected: Set<number>;
   selected: Set<number>;
-  burnSubtitle: boolean;
 }
