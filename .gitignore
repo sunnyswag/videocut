@@ -4,5 +4,6 @@ static/
 *.mp4
 *.mp3
 output/
+videos/
 macro_notes/
 .trae/

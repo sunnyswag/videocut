@@ -1,12 +1,14 @@
+import React from 'react';
 import { useMemo, useState } from 'react';
 import { executeCut } from '../api';
+import { useLocale, type Translations } from '../i18n';
 import type { Word, ProjectState } from '../types';
 
-function formatDuration(seconds: string | number): string {
+function formatDuration(seconds: string | number, t: Translations): string {
   const s = Number(seconds) || 0;
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
-  return m > 0 ? `${m}分${sec}秒` : `${sec}秒`;
+  return m > 0 ? `${m}${t.formatMin}${sec}${t.formatSec}` : `${sec}${t.formatSec}`;
 }
 
 function mergeAdjacentSegments(segments: Array<{ start: number; end: number }>): Array<{ start: number; end: number }> {
@@ -36,9 +38,11 @@ interface UseCutActionsProps {
   currentState: ProjectState | null;
   duration: number;
   burnSubtitle: boolean;
+  videoRef: React.RefObject<HTMLVideoElement>;
 }
 
-export function useCutActions({ currentProjectId, currentState, duration, burnSubtitle }: UseCutActionsProps) {
+export function useCutActions({ currentProjectId, currentState, duration, burnSubtitle, videoRef }: UseCutActionsProps) {
+  const { t } = useLocale();
   const [loading, setLoading] = useState({ show: false, elapsed: 0, estimate: 0 });
 
   const progressPercent = useMemo(
@@ -48,9 +52,9 @@ export function useCutActions({ currentProjectId, currentState, duration, burnSu
   const progressText = useMemo(
     () =>
       loading.elapsed >= loading.estimate
-        ? '即将完成...'
-        : `预估剩余: ${Math.max(0, loading.estimate - loading.elapsed)} 秒`,
-    [loading]
+        ? t.almostDone
+        : `${t.estimateRemain}: ${Math.max(0, loading.estimate - loading.elapsed)} ${t.formatSec}`,
+    [loading, t]
   );
 
   const handleCopyDeleteList = async () => {
@@ -62,23 +66,25 @@ export function useCutActions({ currentProjectId, currentState, duration, burnSu
     }));
     const merged = mergeAdjacentSegments(segments);
     await navigator.clipboard.writeText(JSON.stringify(merged, null, 2));
-    alert('已复制 ' + merged.length + ' 个删除片段到剪贴板');
+    alert(`${merged.length} ${t.copiedSegments}`);
   };
 
   const handleExecuteCut = async () => {
     if (!currentProjectId || !currentState) return;
     const payload = buildEditsPayload(currentState.words, currentState.selected, burnSubtitle);
     if (!payload.deletes.length) {
-      alert('请先选择要删除的内容');
+      alert(t.selectFirst);
       return;
     }
 
     const estimated = Math.max(5, Math.ceil((duration || 0) / 4));
-    const estMin = Math.floor(estimated / 60);
-    const estSec = estimated % 60;
-    const estText = estMin > 0 ? `${estMin}分${estSec}秒` : `${estSec}秒`;
-    if (!confirm(`确认执行剪辑？\n\n📹 当前项目: ${currentProjectId}\n⏱️ 预计耗时: ${estText}\n\n点击确定开始`))
+    const estText = formatDuration(estimated, t);
+    if (!confirm(`${t.confirmCutTitle}\n\n📹 ${t.currentProject}: ${currentProjectId}\n⏱️ ${t.estimatedTime}: ${estText}\n\n${t.clickToStart}`))
       return;
+
+    if (videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause();
+    }
 
     const start = Date.now();
     setLoading({ show: true, elapsed: 0, estimate: estimated });
@@ -93,17 +99,17 @@ export function useCutActions({ currentProjectId, currentState, duration, burnSu
       setLoading({ show: false, elapsed: 0, estimate: 0 });
       const totalTime = ((Date.now() - start) / 1000).toFixed(1);
       if (data.success) {
-        const subtitleMsg = data.subtitleOutput ? `\n字幕输出: ${data.subtitleOutput}` : '';
+        const subtitleMsg = data.subtitleOutput ? `\n${t.subtitleOutputLabel}: ${data.subtitleOutput}` : '';
         alert(
-          `✅ 剪辑完成！(耗时 ${totalTime}s)\n\n📁 输出: ${data.output}${subtitleMsg}\n\n原时长: ${formatDuration(data.originalDuration || 0)}\n新时长: ${formatDuration(data.newDuration || 0)}\n删减: ${formatDuration(data.deletedDuration || 0)} (${data.savedPercent}%)`
+          `✅ ${t.cutDone} (${totalTime}s)\n\n📁 ${t.output}: ${data.output}${subtitleMsg}\n\n${t.originalDuration}: ${formatDuration(data.originalDuration || 0, t)}\n${t.newDuration}: ${formatDuration(data.newDuration || 0, t)}\n${t.deleted}: ${formatDuration(data.deletedDuration || 0, t)} (${data.savedPercent}%)`
         );
       } else {
-        alert('❌ 剪辑失败: ' + data.error);
+        alert(`❌ ${t.cutFailed}: ${data.error}`);
       }
     } catch (err: any) {
       clearInterval(timer);
       setLoading({ show: false, elapsed: 0, estimate: 0 });
-      alert('❌ 请求失败: ' + err.message + '\n\n请确保使用 videocut review-server 启动服务');
+      alert(`❌ ${t.requestFailed}: ${err.message}\n\n${t.ensureServer}`);
     }
   };
 

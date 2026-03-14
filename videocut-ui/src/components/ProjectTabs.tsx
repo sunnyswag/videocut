@@ -1,4 +1,5 @@
 import type { Project } from '../types';
+import { useLocale } from '../i18n';
 
 interface ProjectTabsProps {
   projects: Project[];
@@ -8,10 +9,12 @@ interface ProjectTabsProps {
 }
 
 export function ProjectTabs({ projects, currentProjectId, errorText, onSelect }: ProjectTabsProps) {
+  const { t } = useLocale();
+
   return (
     <div className="tabs">
-      {projects.length === 0 && !errorText && <div className="empty-state">暂无项目，请先运行剪口播流程生成数据。</div>}
-      {errorText && <div className="empty-state">加载失败: {errorText}</div>}
+      {projects.length === 0 && !errorText && <div className="empty-state">{t.noProjects}</div>}
+      {errorText && <div className="empty-state">{t.loadFailed} {errorText}</div>}
       {projects.map((p) => (
         <button key={p.id} className={`tab ${p.id === currentProjectId ? 'active' : ''}`} onClick={() => onSelect(p.id)}>
           {p.name}

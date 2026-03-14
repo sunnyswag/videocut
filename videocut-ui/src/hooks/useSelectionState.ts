@@ -30,9 +30,14 @@ export function useSelectionState({
     if (!currentProjectId) return;
     setProjectState(currentProjectId, (state) => {
       const nextSelected = new Set(state.selected);
-      if (nextSelected.has(i)) nextSelected.delete(i);
-      else nextSelected.add(i);
-      return { ...state, selected: nextSelected };
+      const nextAuto = new Set(state.autoSelected);
+      if (nextSelected.has(i)) {
+        nextSelected.delete(i);
+        nextAuto.delete(i);
+      } else {
+        nextSelected.add(i);
+      }
+      return { ...state, selected: nextSelected, autoSelected: nextAuto };
     });
   };
 
@@ -51,11 +56,16 @@ export function useSelectionState({
     const max = Math.max(s.start, i);
     setProjectState(currentProjectId, (state) => {
       const nextSelected = new Set(state.selected);
+      const nextAuto = new Set(state.autoSelected);
       for (let j = min; j <= max; j += 1) {
-        if (s.mode === 'add') nextSelected.add(j);
-        else nextSelected.delete(j);
+        if (s.mode === 'add') {
+          nextSelected.add(j);
+        } else {
+          nextSelected.delete(j);
+          nextAuto.delete(j);
+        }
       }
-      return { ...state, selected: nextSelected };
+      return { ...state, selected: nextSelected, autoSelected: nextAuto };
     });
   };
 
@@ -69,9 +79,13 @@ export function useSelectionState({
     video.currentTime = word.start;
   };
 
-  const handleClearAll = () => {
+  const handleResetToDefault = () => {
     if (!currentProjectId) return;
-    setProjectState(currentProjectId, (state) => ({ ...state, selected: new Set() }));
+    setProjectState(currentProjectId, (state) => ({
+      ...state,
+      autoSelected: new Set(state.initialAutoSelected),
+      selected: new Set(state.initialAutoSelected),
+    }));
   };
 
   return {
@@ -79,6 +93,6 @@ export function useSelectionState({
     handleWordMouseDown,
     handleWordMouseEnter,
     handleWordClick,
-    handleClearAll,
+    handleResetToDefault,
   };
 }

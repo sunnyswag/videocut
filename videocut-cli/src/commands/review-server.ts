@@ -71,13 +71,37 @@ function getProjectById(rootPath: string, projectId: string): Project | null {
   return getProjects(rootPath).find((p) => p.id === projectId) || null;
 }
 
+function findMp4InDir(dir: string): string | null {
+  try {
+    const mp4s = fs.readdirSync(dir).filter((f) => f.endsWith('.mp4') && !f.endsWith('_cut.mp4'));
+    if (mp4s.length > 0) return path.join(dir, mp4s[0]);
+  } catch {}
+  return null;
+}
+
 function findVideoFile(project: Project, rootPath: string): string | null {
   const parentDir = path.dirname(project.path);
-  try {
-    const mp4s = fs.readdirSync(parentDir).filter((f) => f.endsWith('.mp4') && !f.endsWith('_cut.mp4'));
-    if (mp4s.length > 0) return path.join(parentDir, mp4s[0]);
-  } catch {}
 
+  // 1. output 父目录（symlink 所在位置）
+  const inParent = findMp4InDir(parentDir);
+  if (inParent) return inParent;
+
+  // 2. 项目目录自身
+  const inProject = findMp4InDir(project.path);
+  if (inProject) return inProject;
+
+  // 3. 向上逐级查找 videos/ 文件夹（最多 3 层）
+  let ancestor = parentDir;
+  for (let i = 0; i < 3; i++) {
+    const videosDir = path.join(ancestor, 'videos');
+    const inVideos = findMp4InDir(videosDir);
+    if (inVideos) return inVideos;
+    const next = path.dirname(ancestor);
+    if (next === ancestor) break;
+    ancestor = next;
+  }
+
+  // 4. macro_notes 目录（兼容旧目录结构）
   const macroDir = path.resolve(rootPath, '..', '..', '..', 'macro_notes');
   if (fs.existsSync(macroDir)) {
     const videoName = project.id.replace(/^\d{4}-\d{2}-\d{2}_/, '');
@@ -238,17 +262,15 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
       req.on('end', () => {
         try {
           const requestPayload = JSON.parse(body);
-          const parentDir = path.dirname(project.path);
-          const videoFiles = fs.readdirSync(parentDir).filter((f) => f.endsWith('.mp4'));
-          const videoFile = videoFiles[0];
-          if (!videoFile) {
+          const inputPath = findVideoFile(project, rootPath);
+          if (!inputPath) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, error: 'No .mp4 in project folder' }));
+            res.end(JSON.stringify({ success: false, error: 'No .mp4 found for project' }));
             return;
           }
-          const inputPath = path.join(parentDir, videoFile);
-          const baseName = path.basename(videoFile, '.mp4');
-          const outputFile = path.join(parentDir, `${baseName}_cut.mp4`);
+          const baseName = path.basename(inputPath, '.mp4');
+          const outputDir = path.dirname(project.path);
+          const outputFile = path.join(outputDir, `${baseName}_cut.mp4`);
           const { opted } = loadProjectWordsRaw(project);
           const normalized = normalizeEditsPayload(requestPayload);
           const deleteSegments = buildDeleteSegmentsFromDeletes(opted, normalized.deletes as any);
@@ -276,9 +298,9 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
           let srtPath: string | null = null;
           if (normalized.burnSubtitle) {
             const subtitles = buildSubtitlesFromEditedOpted(opted, cutResult.audioOffset, cutResult.keepSegments);
-            srtPath = path.join(parentDir, `${baseName}_cut.srt`);
+            srtPath = path.join(outputDir, `${baseName}_cut.srt`);
             fs.writeFileSync(srtPath, generateSrt(subtitles));
-            subtitleOutput = path.join(parentDir, `${baseName}_cut_字幕.mp4`);
+            subtitleOutput = path.join(outputDir, `${baseName}_cut_字幕.mp4`);
             burnSubtitles(outputFile, srtPath, subtitleOutput);
           }
 

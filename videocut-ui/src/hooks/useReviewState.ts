@@ -27,6 +27,7 @@ export function useReviewState() {
     currentState: projectState.currentState,
     duration: videoState.duration,
     burnSubtitle: projectState.burnSubtitle,
+    videoRef,
   });
 
   return {
@@ -52,7 +53,7 @@ export function useReviewState() {
     handleCopyDeleteList: cutState.handleCopyDeleteList,
     handleExecuteCut: cutState.handleExecuteCut,
     setBurnSubtitle: projectState.setBurnSubtitle,
-    handleClearAll: selectionState.handleClearAll,
+    handleResetToDefault: selectionState.handleResetToDefault,
     handleWordClick: selectionState.handleWordClick,
     toggleWord: selectionState.toggleWord,
     handleWordMouseDown: selectionState.handleWordMouseDown,

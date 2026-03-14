@@ -31,6 +31,7 @@ export interface CutResult {
 
 export interface ProjectState {
   words: Word[];
+  initialAutoSelected: Set<number>;
   autoSelected: Set<number>;
   selected: Set<number>;
   burnSubtitle: boolean;

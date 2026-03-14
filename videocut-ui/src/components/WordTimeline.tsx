@@ -63,7 +63,6 @@ interface WordTimelineProps {
   onToggleWord: (index: number) => void;
   onWordMouseDown: (e: React.MouseEvent, index: number) => void;
   onWordMouseEnter: (index: number) => void;
-  selectedDuration: number;
 }
 
 export function WordTimeline({
@@ -76,31 +75,25 @@ export function WordTimeline({
   onToggleWord,
   onWordMouseDown,
   onWordMouseEnter,
-  selectedDuration,
 }: WordTimelineProps) {
   return (
-    <div>
-      <div className="content">
-        {words.map((word, i) => (
-          <WordItem
-            key={i}
-            word={word}
-            index={i}
-            isGap={word.opt === 'del'}
-            isSelected={selected.has(i)}
-            isAuto={autoSelected.has(i)}
-            isCurrent={i === currentWordIndex}
-            wordRefs={wordRefs}
-            onWordClick={onWordClick}
-            onToggleWord={onToggleWord}
-            onWordMouseDown={onWordMouseDown}
-            onWordMouseEnter={onWordMouseEnter}
-          />
-        ))}
-      </div>
-      <div className="stats">
-        已选择 {selected.size} 个元素，总时长 {selectedDuration.toFixed(2)}s
-      </div>
+    <div className="content">
+      {words.map((word, i) => (
+        <WordItem
+          key={i}
+          word={word}
+          index={i}
+          isGap={!word.text || word.opt === 'blank'}
+          isSelected={selected.has(i)}
+          isAuto={autoSelected.has(i)}
+          isCurrent={i === currentWordIndex}
+          wordRefs={wordRefs}
+          onWordClick={onWordClick}
+          onToggleWord={onToggleWord}
+          onWordMouseDown={onWordMouseDown}
+          onWordMouseEnter={onWordMouseEnter}
+        />
+      ))}
     </div>
   );
 }

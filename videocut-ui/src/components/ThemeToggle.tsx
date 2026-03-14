@@ -1,7 +1,9 @@
 import { useTheme } from '../hooks/useTheme';
+import { useLocale } from '../i18n';
 
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
+  const { t } = useLocale();
 
   return (
     <button className="theme-toggle" onClick={toggleTheme}>
@@ -15,7 +17,7 @@ export function ThemeToggle() {
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
         </svg>
       )}
-      <span>{theme === 'dark' ? '浅色' : '深色'}</span>
+      <span>{theme === 'dark' ? t.lightMode : t.darkMode}</span>
     </button>
   );
 }

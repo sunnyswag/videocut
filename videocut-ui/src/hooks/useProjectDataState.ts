@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchProjectData, fetchProjects } from '../api';
-import type { Project, Word } from '../types';
-
-interface ProjectState {
-  words: Word[];
-  autoSelected: Set<number>;
-  selected: Set<number>;
-  burnSubtitle: boolean;
-}
+import type { Project, ProjectState } from '../types';
 
 export function useProjectDataState() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -47,9 +40,10 @@ export function useProjectDataState() {
       ...prev,
       [projectId]: {
         words: projectWords,
+        initialAutoSelected: new Set(projectAutoSelected),
         autoSelected: projectAutoSelected,
         selected: projectSelected,
-        burnSubtitle: false,
+        burnSubtitle: true,
       },
     }));
   };

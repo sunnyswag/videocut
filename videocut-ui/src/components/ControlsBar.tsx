@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocale } from '../i18n';
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -10,85 +11,89 @@ interface ControlsBarProps {
   videoRef: React.RefObject<HTMLVideoElement>;
   currentTime: number;
   duration: number;
-  onTimeUpdate: () => void;
   onPlayPause: () => void;
-  onCopyDeleteList: () => void;
   onExecuteCut: () => void;
-  onClearAll: () => void;
+  onResetToDefault: () => void;
   burnSubtitle: boolean;
   onBurnSubtitleChange: (value: boolean) => void;
+  selectedCount: number;
+  selectedDuration: number;
 }
 
 export function ControlsBar({
   videoRef,
   currentTime,
   duration,
-  onTimeUpdate,
   onPlayPause,
-  onCopyDeleteList,
   onExecuteCut,
-  onClearAll,
+  onResetToDefault,
   burnSubtitle,
   onBurnSubtitleChange,
+  selectedCount,
+  selectedDuration,
 }: ControlsBarProps) {
+  const { t } = useLocale();
+
   return (
-    <div className="controls">
-      <div className="buttons">
-        <button id="btnPlay" onClick={onPlayPause}>
-          ▶️ 播放/暂停
-        </button>
+    <div className="toolbar">
+      <div className="toolbar-group">
+        <button className="btn-icon" onClick={onPlayPause} title={t.playPause}>▶︎</button>
         <select
-          id="speed"
+          className="speed-select"
+          defaultValue="1"
           onChange={(e) => {
             if (videoRef.current) videoRef.current.playbackRate = parseFloat(e.target.value);
           }}
         >
           <option value="0.5">0.5x</option>
           <option value="0.75">0.75x</option>
-          <option value="1" selected>
-            1x
-          </option>
+          <option value="1">1x</option>
           <option value="1.25">1.25x</option>
           <option value="1.5">1.5x</option>
           <option value="2">2x</option>
         </select>
-        <button id="btnCopy" onClick={onCopyDeleteList}>
-          📋 复制删除列表
-        </button>
-        <button id="btnCut" style={{ background: '#9C27B0' }} onClick={onExecuteCut}>
-          🎬 执行剪辑
-        </button>
-        <label style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            id="burnSubtitle"
-            checked={burnSubtitle}
-            onChange={(e) => onBurnSubtitleChange(e.target.checked)}
-          />{' '}
-          剪辑后烧录字幕
-        </label>
-        <button className="danger" id="btnClear" onClick={onClearAll}>
-          🗑️ 清空选择
-        </button>
-        <span id="time">
-          {formatTime(currentTime)} / {formatTime(duration)}
+        <span className="time-display">
+          {formatTime(currentTime)}<span className="time-sep">/</span>{formatTime(duration)}
         </span>
       </div>
 
-      <video id="videoPlayer" ref={videoRef} preload="auto" onTimeUpdate={onTimeUpdate}></video>
+      <div className="toolbar-center">
+        {selectedCount > 0 && (
+          <span className="stats-inline">
+            <strong>{selectedCount}</strong> {t.segments} · {selectedDuration.toFixed(1)}s
+          </span>
+        )}
+      </div>
+
+      <div className="toolbar-group">
+        <label className="burn-label">
+          <input
+            type="checkbox"
+            checked={burnSubtitle}
+            onChange={(e) => onBurnSubtitleChange(e.target.checked)}
+          />
+          {t.burnSubtitle}
+        </label>
+        <button className="btn-ghost" onClick={onResetToDefault}>{t.resetDefault}</button>
+        <button className="btn-execute" onClick={onExecuteCut}>{t.executeCut}</button>
+      </div>
 
       <details className="help">
-        <summary>显示操作说明</summary>
-        <div>
-          <b>🖱️ 鼠标：</b>单击 = 跳转播放 | 双击 = 选中/取消 | Shift+拖动 = 批量选中/取消
-        </div>
-        <div>
-          <b>⌨️ 键盘：</b>空格 = 播放/暂停 | ← → = 跳转1秒 | Shift+←→ = 跳转5秒
-        </div>
-        <div>
-          <b>🎨 颜色：</b>
-          <span style={{ color: '#ff9800' }}>橙色</span> = AI预选 |{' '}
-          <span style={{ color: '#f44336' }}>红色删除线</span> = 已确认删除 | 播放时自动跳过选中片段
+        <summary>{t.instructions}</summary>
+        <div className="help-content">
+          <span><b>{t.helpClick}</b> {t.helpJumpPlay}</span>
+          <span className="help-sep">·</span>
+          <span><b>{t.helpDblClick}</b> {t.helpSelectToggle}</span>
+          <span className="help-sep">·</span>
+          <span><b>{t.helpShiftDrag}</b> {t.helpBatch}</span>
+          <span className="help-sep">·</span>
+          <span><b>{t.helpSpace}</b> {t.playPause}</span>
+          <span className="help-sep">·</span>
+          <span><b>{t.helpArrows}</b> {t.helpJump}</span>
+          <span className="help-sep">·</span>
+          <span className="color-warning">●</span> {t.aiPreselect}
+          <span className="help-sep">·</span>
+          <span className="color-danger">●</span> {t.confirmedDelete}
         </div>
       </details>
     </div>

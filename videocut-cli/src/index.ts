@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import { transcribe } from './commands/transcribe.js';
 import { generateSubtitles } from './commands/generate-subtitles.js';
-import { generateReview } from './commands/generate-review.js';
+import { generateReview } from './commands/generate-readable.js';
 import { applyEdits } from './commands/apply-edits.js';
 import { reviewServer } from './commands/review-server.js';
 import { cutVideo } from './commands/cut-video.js';
@@ -27,7 +27,7 @@ program
   .action(generateSubtitles);
 
 program
-  .command('generate-review <subtitles>')
+  .command('generate-readable <subtitles>')
   .description('Generate readable review format from subtitles')
   .option('-o, --output <file>', 'Output file path')
   .action(generateReview);

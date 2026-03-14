@@ -26,7 +26,7 @@ export function generateReview(
       out += `${i}|${u.text}\n`;
       if (u.words) {
         u.words.forEach((w, j) => {
-          out += `  ${j}|${w.text}\n`;
+          out += `${j}|${w.text}\n`;
         });
       }
     }
