@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import type { Utterance, DeleteSegment, Subtitle } from './types.js';
+import { assAlignmentFromPreset, assColorFromHex, escapeAssText, normalizeSubtitleStylePreset } from './subtitle-style.js';
+import type { Utterance, DeleteSegment, Subtitle, SubtitleStylePreset } from './types.js';
 import { getPreferredEncoder } from './video.js';
 
 interface SubtitleFont {
@@ -156,12 +157,33 @@ export function buildSubtitlesFromEditedOpted(
   return remapped;
 }
 
-export function burnSubtitles(videoPath: string, srtPath: string, outputPath: string): void {
+export function burnSubtitles(
+  videoPath: string,
+  srtPath: string,
+  outputPath: string,
+  subtitleStyle?: SubtitleStylePreset
+): void {
   const encoder = getPreferredEncoder();
   const font = resolveSubtitleFont();
   const escapedSrtPath = escapeFilterValue(srtPath);
   const escapedFontsDir = font.fontsDir ? escapeFilterValue(font.fontsDir) : null;
-  const style = `FontSize=22,FontName=${font.family},Bold=700,Spacing=0.8,PrimaryColour=&H00FFFFFF,OutlineColour=&H00606060,Outline=1,BorderStyle=1,Alignment=2,MarginV=22`;
+  const stylePreset = normalizeSubtitleStylePreset(subtitleStyle);
+  const fontFamily = stylePreset.fontFamilyHint || font.family;
+  const bold = stylePreset.fontWeight >= 600 ? -1 : 0;
+  const shadow = Math.round(stylePreset.shadow * 10) / 10;
+  const style = [
+    `FontSize=${Math.round(stylePreset.fontSize * 10) / 10}`,
+    `FontName=${escapeAssText(fontFamily)}`,
+    `Bold=${bold}`,
+    `Spacing=${Math.round(stylePreset.letterSpacing * 10) / 10}`,
+    `PrimaryColour=${assColorFromHex(stylePreset.textColor)}`,
+    `OutlineColour=${assColorFromHex(stylePreset.outlineColor)}`,
+    `Outline=${Math.round(stylePreset.outlineWidth * 10) / 10}`,
+    `Shadow=${shadow}`,
+    'BorderStyle=1',
+    `Alignment=${assAlignmentFromPreset(stylePreset.alignment)}`,
+    `MarginV=${Math.round(stylePreset.bottomOffset)}`,
+  ].join(',');
   const filterParts = [`subtitles='${escapedSrtPath}'`, 'charenc=UTF-8'];
   if (escapedFontsDir) {
     filterParts.push(`fontsdir='${escapedFontsDir}'`);
@@ -169,7 +191,7 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
   filterParts.push(`force_style='${style}'`);
   const filter = filterParts.join(':');
   console.log(`📝 烧录字幕使用编码器: ${encoder.label}`);
-  console.log(`🔤 烧录字幕使用字体: ${font.family}${font.file ? ` (${font.file})` : ''}`);
+  console.log(`🔤 烧录字幕使用字体: ${fontFamily}${font.file ? ` (${font.file})` : ''}`);
   const cmd = `ffmpeg -y -i "file:${videoPath}" -vf "${filter}" -c:v ${encoder.name} ${encoder.args} -c:a copy "file:${outputPath}"`;
   execSync(cmd, { stdio: 'pipe', maxBuffer: 1024 * 1024 * 16 });
 }

@@ -31,6 +31,7 @@ export function useReviewState() {
     includedProjectIds: projectState.includedProjectIds,
     duration: videoState.duration,
     burnSubtitle: projectState.burnSubtitle,
+    subtitleStyle: projectState.subtitleStyle,
     videoRef,
   });
 
@@ -58,6 +59,9 @@ export function useReviewState() {
     exportDialog: cutState.exportDialog,
     progressPercentLabel: cutState.progressPercentLabel,
     burnSubtitle: projectState.burnSubtitle,
+    subtitleStyle: projectState.subtitleStyle,
+    subtitleStyleJson: projectState.subtitleStyleJson,
+    subtitleStyleError: projectState.subtitleStyleError,
     errorText: projectState.errorText,
     selectedDuration: projectState.selectedDuration,
     progressPercent: cutState.progressPercent,
@@ -70,6 +74,8 @@ export function useReviewState() {
     handleExecuteCut: cutState.handleExecuteCut,
     handleExecuteMergeCut: cutState.handleExecuteMergeCut,
     setBurnSubtitle: projectState.setBurnSubtitle,
+    applySubtitleStyle: projectState.applySubtitleStyle,
+    setSubtitleStyleJson: projectState.setSubtitleStyleJson,
     handleResetToDefault: selectionState.handleResetToDefault,
     handleWordClick: selectionState.handleWordClick,
     toggleWord: selectionState.toggleWord,

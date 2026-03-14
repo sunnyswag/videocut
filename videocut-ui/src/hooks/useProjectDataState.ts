@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchProjectData, fetchProjects } from '../api';
-import type { Project, ProjectState } from '../types';
+import { loadStoredSubtitleStyle, parseSubtitleStyleJson, serializeSubtitleStyle, storeSubtitleStyle } from '../subtitleStyle';
+import type { Project, ProjectState, SubtitleStylePreset } from '../types';
 
 export function useProjectDataState() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -10,6 +11,9 @@ export function useProjectDataState() {
   const [includedProjectIds, setIncludedProjectIds] = useState<Set<string>>(new Set());
   const [burnSubtitle, setBurnSubtitle] = useState(true);
   const [errorText, setErrorText] = useState('');
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStylePreset>(() => loadStoredSubtitleStyle());
+  const [subtitleStyleJson, setSubtitleStyleJson] = useState(() => serializeSubtitleStyle(loadStoredSubtitleStyle()));
+  const [subtitleStyleError, setSubtitleStyleError] = useState('');
 
   const currentState = currentProjectId ? stateByProject[currentProjectId] : null;
   const words = currentState?.words || [];
@@ -69,6 +73,10 @@ export function useProjectDataState() {
     })();
   }, []);
 
+  useEffect(() => {
+    storeSubtitleStyle(subtitleStyle);
+  }, [subtitleStyle]);
+
   const toggleIncludeProject = (projectId: string) => {
     setIncludedProjectIds((prev) => {
       const next = new Set(prev);
@@ -106,6 +114,23 @@ export function useProjectDataState() {
     });
   };
 
+  const applySubtitleStyle = (style: SubtitleStylePreset) => {
+    setSubtitleStyle(style);
+    setSubtitleStyleJson(serializeSubtitleStyle(style));
+    setSubtitleStyleError('');
+  };
+
+  const handleSubtitleStyleJsonChange = (raw: string) => {
+    setSubtitleStyleJson(raw);
+    const parsed = parseSubtitleStyleJson(raw);
+    if (parsed.value) {
+      setSubtitleStyle(parsed.value);
+      setSubtitleStyleError('');
+      return;
+    }
+    setSubtitleStyleError(parsed.error || '');
+  };
+
   return {
     projects,
     currentProjectId,
@@ -123,6 +148,11 @@ export function useProjectDataState() {
     autoSelected,
     burnSubtitle,
     setBurnSubtitle,
+    subtitleStyle,
+    subtitleStyleJson,
+    subtitleStyleError,
+    applySubtitleStyle,
+    setSubtitleStyleJson: handleSubtitleStyleJsonChange,
     selectedDuration,
     errorText,
   };

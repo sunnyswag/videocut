@@ -8,8 +8,6 @@ interface BatchExportPanelProps {
   orderedProjectIds: string[];
   includedProjectIds: Set<string>;
   stateByProject: Record<string, ProjectState>;
-  burnSubtitle: boolean;
-  onBurnSubtitleChange: (value: boolean) => void;
   onSelectProject: (projectId: string) => void;
   onToggleInclude: (projectId: string) => void;
   onReorderProject: (sourceProjectId: string, targetProjectId: string) => void;
@@ -22,8 +20,6 @@ export function BatchExportPanel({
   orderedProjectIds,
   includedProjectIds,
   stateByProject,
-  burnSubtitle,
-  onBurnSubtitleChange,
   onSelectProject,
   onToggleInclude,
   onReorderProject,
@@ -84,14 +80,6 @@ export function BatchExportPanel({
           })}
         </div>
         <div className="batch-panel-actions">
-          <label className="burn-label">
-            <input
-              type="checkbox"
-              checked={burnSubtitle}
-              onChange={(e) => onBurnSubtitleChange(e.target.checked)}
-            />
-            {t.burnSubtitle}
-          </label>
           <button className="btn-execute" onClick={onExecuteMergeCut} disabled={includedCount === 0}>
             {t.mergeExecute}
           </button>

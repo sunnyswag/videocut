@@ -1,6 +1,6 @@
 {
   "name": "@huiqinghuang/videocut-cli",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Video clipping CLI tool for podcast videos",
   "type": "module",
   "bin": {

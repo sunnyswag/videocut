@@ -30,9 +30,6 @@ interface ControlsBarProps {
   duration: number;
   isPlaying: boolean;
   onPlayPause: () => void;
-  onResetToDefault: () => void;
-  selectedCount: number;
-  selectedDuration: number;
 }
 
 export function ControlsBar({
@@ -41,15 +38,12 @@ export function ControlsBar({
   duration,
   isPlaying,
   onPlayPause,
-  onResetToDefault,
-  selectedCount,
-  selectedDuration,
 }: ControlsBarProps) {
   const { t } = useLocale();
 
   return (
     <div className="toolbar">
-      <div className="toolbar-group">
+      <div className="toolbar-group toolbar-main">
         <button className="btn-icon" onClick={onPlayPause} title={t.playPause}>
           {isPlaying ? <PauseIcon /> : <PlayIcon />}
         </button>
@@ -70,18 +64,6 @@ export function ControlsBar({
         <span className="time-display">
           {formatTime(currentTime)}<span className="time-sep">/</span>{formatTime(duration)}
         </span>
-      </div>
-
-      <div className="toolbar-center">
-        {selectedCount > 0 && (
-          <span className="stats-inline">
-            <strong>{selectedCount}</strong> {t.segments} · {selectedDuration.toFixed(1)}s
-          </span>
-        )}
-      </div>
-
-      <div className="toolbar-group">
-        <button className="btn-ghost" onClick={onResetToDefault}>{t.resetDefault}</button>
       </div>
     </div>
   );

@@ -5,8 +5,9 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { cutVideo, mergeProjectVideos, computeCutPlan } from '../core/video.js';
 import { applyEditsToOpted, deepClone, buildDeleteSegmentsFromDeletes } from '../core/edits.js';
+import { normalizeSubtitleStylePreset } from '../core/subtitle-style.js';
 import { generateSrt, buildSubtitlesFromEditedOpted, burnSubtitles } from '../core/subtitle.js';
-import type { Project, Utterance, DeleteSegment, Edits } from '../core/types.js';
+import type { Project, Utterance, DeleteSegment, Edits, SubtitleStylePreset } from '../core/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -263,6 +264,7 @@ function loadProjectWordsRaw(project: Project): { rawPath: string; opted: Uttera
 interface NormalizedPayload {
   deletes: DeleteSegment[];
   burnSubtitle: boolean;
+  subtitleStyle?: SubtitleStylePreset;
 }
 
 function normalizeEditsPayload(payload: any): NormalizedPayload {
@@ -271,7 +273,8 @@ function normalizeEditsPayload(payload: any): NormalizedPayload {
   }
   const deletes = Array.isArray(payload?.deletes) ? payload.deletes : [];
   const burnSubtitle = Boolean(payload?.burnSubtitle);
-  return { deletes, burnSubtitle };
+  const subtitleStyle = payload?.subtitleStyle ? normalizeSubtitleStylePreset(payload.subtitleStyle) : undefined;
+  return { deletes, burnSubtitle, subtitleStyle };
 }
 
 function writeProjectEdits(project: Project, deletes: DeleteSegment[], deleteSegments: DeleteSegment[]) {
@@ -376,6 +379,21 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
       return;
     }
 
+    if (req.method === 'POST' && urlPath === '/api/subtitle-style/generate') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        res.writeHead(501, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            success: false,
+            error: 'Subtitle style AI generation is reserved for phase two and is not implemented yet.',
+          })
+        );
+      });
+      return;
+    }
+
     const cutMatch = urlPath.match(/^\/api\/cut\/(.+)$/);
     if (req.method === 'POST' && cutMatch) {
       const projectId = decodeURIComponent(cutMatch[1]);
@@ -426,7 +444,7 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
             srtPath = path.join(outputDir, `${baseName}_cut.srt`);
             fs.writeFileSync(srtPath, generateSrt(subtitles));
             subtitleOutput = path.join(outputDir, `${baseName}_cut_subtitled.mp4`);
-            burnSubtitles(outputFile, srtPath, subtitleOutput);
+            burnSubtitles(outputFile, srtPath, subtitleOutput, normalized.subtitleStyle);
           }
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -459,6 +477,7 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
           const projectIds = Array.isArray(payload?.projectIds) ? payload.projectIds.map((id: unknown) => String(id)) : [];
           const deleteMap = payload?.deleteMap && typeof payload.deleteMap === 'object' ? payload.deleteMap : {};
           const burnSubtitle = Boolean(payload?.burnSubtitle);
+          const subtitleStyle = payload?.subtitleStyle ? normalizeSubtitleStylePreset(payload.subtitleStyle) : undefined;
 
           if (projectIds.length === 0) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -525,7 +544,7 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
             srtPath = path.join(rootPath, 'merged_cut.srt');
             fs.writeFileSync(srtPath, generateSrt(mergedSubtitles));
             subtitleOutput = path.join(rootPath, 'merged_cut_subtitled.mp4');
-            burnSubtitles(outputFile, srtPath, subtitleOutput);
+            burnSubtitles(outputFile, srtPath, subtitleOutput, subtitleStyle);
           }
 
           res.writeHead(200, { 'Content-Type': 'application/json' });

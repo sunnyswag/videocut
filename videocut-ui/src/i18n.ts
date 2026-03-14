@@ -59,6 +59,17 @@ export interface Translations {
   dialogConfirm: string;
   dialogCancel: string;
   dialogClose: string;
+  subtitleStyleTitle: string;
+  subtitlePresetLabel: string;
+  subtitleJsonLabel: string;
+  subtitleJsonHint: string;
+  subtitleJsonValid: string;
+  subtitleJsonInvalid: string;
+  subtitlePromptLabel: string;
+  subtitlePromptHint: string;
+  subtitleCopyPrompt: string;
+  subtitlePromptCopied: string;
+  subtitleUpcoming: string;
 }
 
 const zh: Translations = {
@@ -117,6 +128,17 @@ const zh: Translations = {
   dialogConfirm: '确认',
   dialogCancel: '取消',
   dialogClose: '知道了',
+  subtitleStyleTitle: '字幕样式',
+  subtitlePresetLabel: '内置预设',
+  subtitleJsonLabel: 'AI JSON 样式',
+  subtitleJsonHint: '直接粘贴 AI 返回的 JSON，校验通过后会立即应用。',
+  subtitleJsonValid: 'JSON 校验通过，已应用当前样式。',
+  subtitleJsonInvalid: 'JSON 校验失败',
+  subtitlePromptLabel: '给 AI 的提示词模板',
+  subtitlePromptHint: '让 AI 只返回 schema JSON，不要自由文本。',
+  subtitleCopyPrompt: '复制提示词',
+  subtitlePromptCopied: '提示词已复制',
+  subtitleUpcoming: '内置自然语言生成样式将在下一阶段接入。',
 };
 
 const en: Translations = {
@@ -175,6 +197,17 @@ const en: Translations = {
   dialogConfirm: 'Confirm',
   dialogCancel: 'Cancel',
   dialogClose: 'Close',
+  subtitleStyleTitle: 'Subtitle Style',
+  subtitlePresetLabel: 'Presets',
+  subtitleJsonLabel: 'AI JSON Style',
+  subtitleJsonHint: 'Paste AI-generated JSON. Valid input is applied immediately.',
+  subtitleJsonValid: 'JSON is valid and has been applied.',
+  subtitleJsonInvalid: 'JSON validation failed',
+  subtitlePromptLabel: 'Prompt Template for AI',
+  subtitlePromptHint: 'Ask the model to return schema JSON only.',
+  subtitleCopyPrompt: 'Copy Prompt',
+  subtitlePromptCopied: 'Prompt copied',
+  subtitleUpcoming: 'Built-in natural language style generation will land in the next phase.',
 };
 
 const locales: Record<Locale, Translations> = { zh, en };

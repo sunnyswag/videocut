@@ -57,6 +57,30 @@ export interface Subtitle {
   end: number;
 }
 
+export type SubtitleAlignment =
+  | 'bottom-left'
+  | 'bottom-center'
+  | 'bottom-right'
+  | 'top-left'
+  | 'top-center'
+  | 'top-right';
+
+export interface SubtitleStylePreset {
+  fontSize: number;
+  fontWeight: number;
+  textColor: string;
+  outlineColor: string;
+  outlineWidth: number;
+  letterSpacing: number;
+  bottomOffset: number;
+  alignment: SubtitleAlignment;
+  maxWidthPercent: number;
+  shadow: number;
+  fontFamilyHint?: string;
+  source?: string;
+  rawPrompt?: string;
+}
+
 export interface Project {
   id: string;
   name: string;

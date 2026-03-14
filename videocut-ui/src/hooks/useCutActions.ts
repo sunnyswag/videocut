@@ -2,7 +2,7 @@ import React from 'react';
 import { useMemo, useRef, useState } from 'react';
 import { executeCut, executeMergeCut } from '../api';
 import { useLocale, type Translations } from '../i18n';
-import type { Word, ProjectState } from '../types';
+import type { Word, ProjectState, SubtitleStylePreset } from '../types';
 import type { ExportDialogState, ExportDialogTone } from '../components/ExportDialog';
 
 type ExportMode = 'cut' | 'merge';
@@ -142,6 +142,7 @@ interface UseCutActionsProps {
   includedProjectIds: Set<string>;
   duration: number;
   burnSubtitle: boolean;
+  subtitleStyle: SubtitleStylePreset;
   videoRef: React.RefObject<HTMLVideoElement>;
 }
 
@@ -153,6 +154,7 @@ export function useCutActions({
   includedProjectIds,
   duration,
   burnSubtitle,
+  subtitleStyle,
   videoRef,
 }: UseCutActionsProps) {
   const { t } = useLocale();
@@ -270,7 +272,7 @@ export function useCutActions({
     }, 500);
 
     try {
-      const data = await executeCut(currentProjectId, payload.deletes, burnSubtitle);
+      const data = await executeCut(currentProjectId, payload.deletes, burnSubtitle, subtitleStyle);
       clearInterval(timer);
       setLoading({ show: false, elapsed: 0, estimate: 0 });
       const elapsedSeconds = (Date.now() - start) / 1000;
@@ -360,7 +362,7 @@ export function useCutActions({
     }, 500);
 
     try {
-      const data = await executeMergeCut(readyProjects, deleteMap, burnSubtitle);
+      const data = await executeMergeCut(readyProjects, deleteMap, burnSubtitle, subtitleStyle);
       clearInterval(timer);
       setLoading({ show: false, elapsed: 0, estimate: 0 });
       const elapsedSeconds = (Date.now() - start) / 1000;

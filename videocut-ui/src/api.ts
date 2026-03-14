@@ -1,4 +1,4 @@
-import type { Project, Word, CutResult } from './types';
+import type { Project, Word, CutResult, SubtitleStylePreset } from './types';
 
 const API_BASE = '/api';
 
@@ -21,12 +21,13 @@ export function getVideoUrl(projectId: string): string {
 export async function executeCut(
   projectId: string,
   deletes: Array<{ start: number; end: number }>,
-  burnSubtitle: boolean = false
+  burnSubtitle: boolean = false,
+  subtitleStyle?: SubtitleStylePreset
 ): Promise<CutResult> {
   const res = await fetch(`${API_BASE}/cut/${encodeURIComponent(projectId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ deletes, burnSubtitle }),
+    body: JSON.stringify({ deletes, burnSubtitle, subtitleStyle }),
   });
   return res.json();
 }
@@ -34,12 +35,13 @@ export async function executeCut(
 export async function executeMergeCut(
   projectIds: string[],
   deleteMap: Record<string, Array<{ start: number; end: number }>>,
-  burnSubtitle: boolean = false
+  burnSubtitle: boolean = false,
+  subtitleStyle?: SubtitleStylePreset
 ): Promise<CutResult> {
   const res = await fetch(`${API_BASE}/merge-cut`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectIds, deleteMap, burnSubtitle }),
+    body: JSON.stringify({ projectIds, deleteMap, burnSubtitle, subtitleStyle }),
   });
   return res.json();
 }
