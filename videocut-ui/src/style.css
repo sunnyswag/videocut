@@ -295,7 +295,9 @@ h1 {
 
 /* ── Video ── */
 .video-section {
-  position: relative;
+  position: sticky;
+  top: 10px;
+  z-index: 30;
   margin-bottom: 0;
   border-radius: var(--radius) var(--radius) 0 0;
   overflow: hidden;
@@ -844,6 +846,14 @@ input[type="checkbox"] {
   border-radius: var(--radius);
   padding: 20px 24px;
   box-shadow: var(--shadow-sm);
+}
+
+.timeline-scroll {
+  max-height: 44vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  padding-right: 4px;
 }
 
 .content {

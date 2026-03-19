@@ -120,17 +120,19 @@ function App() {
             </div>
           </div>
         </div>
-        <WordTimeline
-          words={state.words}
-          selected={state.selected}
-          autoSelected={state.autoSelected}
-          currentWordIndex={state.currentWordIndex}
-          wordRefs={state.wordRefs}
-          onWordClick={state.handleWordClick}
-          onToggleWord={state.toggleWord}
-          onWordMouseDown={state.handleWordMouseDown}
-          onWordMouseEnter={state.handleWordMouseEnter}
-        />
+        <div className="timeline-scroll">
+          <WordTimeline
+            words={state.words}
+            selected={state.selected}
+            autoSelected={state.autoSelected}
+            currentWordIndex={state.currentWordIndex}
+            wordRefs={state.wordRefs}
+            onWordClick={state.handleWordClick}
+            onToggleWord={state.toggleWord}
+            onWordMouseDown={state.handleWordMouseDown}
+            onWordMouseEnter={state.handleWordMouseEnter}
+          />
+        </div>
       </div>
     </div>
   );

@@ -168,7 +168,7 @@ export function useVideoPlayerState({
 
   useEffect(() => {
     const node = wordRefs.current[currentWordIndex];
-    if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (node) node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
   }, [currentWordIndex, wordRefs]);
 
   useEffect(() => {

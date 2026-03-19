@@ -13,7 +13,7 @@ function sleep(ms: number) {
 
 export async function transcribe(
   videoPath: string,
-  options: { output?: string }
+  options: { output?: string; hotwords?: string }
 ): Promise<void> {
   const videoFile = path.resolve(videoPath);
   if (!fs.existsSync(videoFile)) {
@@ -27,6 +27,27 @@ export async function transcribe(
 
   const audioPath = path.join(transcribeDir, 'audio.mp3');
   const resultPath = path.join(transcribeDir, 'volcengine_result.json');
+  let hotwords: string[] = [];
+
+  if (options.hotwords) {
+    const hotwordsPath = path.resolve(options.hotwords);
+    if (!fs.existsSync(hotwordsPath)) {
+      console.error(`❌ 找不到热词文件: ${hotwordsPath}`);
+      process.exit(1);
+    }
+    const rawHotwords = fs.readFileSync(hotwordsPath, 'utf8');
+    hotwords = rawHotwords
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+    if (hotwords.length === 0) {
+      console.warn(`⚠️ 热词文件为空或仅包含注释: ${hotwordsPath}`);
+    } else {
+      console.log(`🔥 已加载热词 ${hotwords.length} 条: ${hotwordsPath}`);
+      fs.writeFileSync(path.join(transcribeDir, 'hotwords_used.json'), JSON.stringify(hotwords, null, 2));
+    }
+  }
 
   console.log(`📹 视频文件: ${videoFile}`);
   console.log(`📂 输出目录: ${transcribeDir}`);
@@ -70,14 +91,29 @@ export async function transcribe(
     words_per_line: '15',
   });
 
-  const submitResponse = await fetch(`${SUBMIT_URL}?${submitParams}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-    },
-    body: JSON.stringify({ url: audioUrl }),
-  });
+  const submitWithPayload = async (payload: Record<string, unknown>) =>
+    fetch(`${SUBMIT_URL}?${submitParams}`, {
+      method: 'POST',
+      headers: {
+        Accept: '*/*',
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+  let submitResponse: Response;
+  if (hotwords.length > 0) {
+    submitResponse = await submitWithPayload({ url: audioUrl, hot_words: hotwords });
+    if (!submitResponse.ok) {
+      const errBody = await submitResponse.text();
+      console.warn(`⚠️ 热词提交失败，回退为普通转写: ${submitResponse.status}`);
+      console.warn(`响应: ${errBody}`);
+      submitResponse = await submitWithPayload({ url: audioUrl });
+    }
+  } else {
+    submitResponse = await submitWithPayload({ url: audioUrl });
+  }
 
   if (!submitResponse.ok) {
     const errBody = await submitResponse.text();

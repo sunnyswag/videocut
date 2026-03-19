@@ -18,6 +18,7 @@ program
   .command('transcribe <video>')
   .description('Transcribe video using Volcengine API')
   .option('-o, --output <dir>', 'Output directory')
+  .option('--hotwords <file>', 'Hotword list file path (one term per line)')
   .action(transcribe);
 
 program
