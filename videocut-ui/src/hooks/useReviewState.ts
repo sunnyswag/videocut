@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useProjectDataState } from './useProjectDataState';
 import { useVideoPlayerState } from './useVideoPlayerState';
 import { useSelectionState } from './useSelectionState';
+import { useEditState } from './useEditState';
 import { useCutActions } from './useCutActions';
 
 export function useReviewState() {
@@ -23,6 +24,11 @@ export function useReviewState() {
     setProjectState: projectState.setProjectState,
     onSeekToTime: videoState.seekToTime,
   });
+  const editState = useEditState({
+    currentProjectId: projectState.currentProjectId,
+    currentState: projectState.currentState,
+    setProjectState: projectState.setProjectState,
+  });
   const cutState = useCutActions({
     currentProjectId: projectState.currentProjectId,
     currentState: projectState.currentState,
@@ -32,6 +38,11 @@ export function useReviewState() {
     duration: videoState.duration,
     burnSubtitle: projectState.burnSubtitle,
     subtitleStyle: projectState.subtitleStyle,
+    projectWords: projectState.words,
+    projectSelected: projectState.selected,
+    projectInitialAutoSelected: projectState.currentState?.initialAutoSelected || new Set<number>(),
+    pendingTextChanges: projectState.currentState?.pendingTextChanges || [],
+    clearPendingTextChanges: editState.clearPendingTextChanges,
     videoRef,
   });
 
@@ -50,10 +61,12 @@ export function useReviewState() {
     words: projectState.words,
     selected: projectState.selected,
     autoSelected: projectState.autoSelected,
+    editingIndex: editState.editingIndex,
     currentTime: videoState.currentTime,
     duration: videoState.duration,
     currentWordIndex: videoState.currentWordIndex,
     isPlaying: videoState.isPlaying,
+    videoReady: videoState.videoReady,
     registerVideoElement: videoState.registerVideoElement,
     loading: cutState.loading,
     exportDialog: cutState.exportDialog,
@@ -81,5 +94,9 @@ export function useReviewState() {
     toggleWord: selectionState.toggleWord,
     handleWordMouseDown: selectionState.handleWordMouseDown,
     handleWordMouseEnter: selectionState.handleWordMouseEnter,
+    startEdit: editState.startEdit,
+    commitEdit: editState.commitEdit,
+    cancelEdit: editState.cancelEdit,
+    handleSaveReview: cutState.handleSaveReview,
   };
 }

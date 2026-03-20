@@ -49,6 +49,8 @@ export function useProjectDataState() {
         initialAutoSelected: new Set(projectAutoSelected),
         autoSelected: projectAutoSelected,
         selected: projectSelected,
+        editingIndex: null,
+        pendingTextChanges: [],
       },
     }));
   };

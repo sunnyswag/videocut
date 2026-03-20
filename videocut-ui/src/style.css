@@ -294,10 +294,14 @@ h1 {
 }
 
 /* ── Video ── */
-.video-section {
+.video-player-container {
   position: sticky;
   top: 10px;
-  z-index: 30;
+  z-index: 120;
+}
+
+.video-section {
+  position: relative;
   margin-bottom: 0;
   border-radius: var(--radius) var(--radius) 0 0;
   overflow: hidden;
@@ -322,6 +326,40 @@ h1 {
 .video-player.active {
   opacity: 1;
   pointer-events: auto;
+}
+
+.video-proxy-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.video-proxy-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: proxy-spin 0.8s linear infinite;
+}
+
+@keyframes proxy-spin {
+  to { transform: rotate(360deg); }
+}
+
+.video-proxy-text {
+  color: #fff;
+  font-size: 14px;
+  opacity: 0.9;
+  text-align: center;
+  max-width: 80%;
 }
 
 .subtitle-overlay {
@@ -372,9 +410,8 @@ h1 {
 
 /* ── Toolbar (sticky) ── */
 .toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  position: relative;
+  z-index: 1;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-top: none;
@@ -918,6 +955,24 @@ input[type="checkbox"] {
   text-decoration: line-through;
 }
 
+.word-inline-input {
+  width: 2em;
+  min-width: 1.5em;
+  height: 24px;
+  border: 1px solid var(--accent-color);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  outline: none;
+}
+
+.word-inline-input:focus {
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
 /* ── Gap ── */
 .gap {
   font-variant-numeric: tabular-nums;
@@ -1105,6 +1160,7 @@ input[type="checkbox"] {
 button {
   border: none;
   background: none;
+  color: inherit;
   cursor: pointer;
   font-family: inherit;
 }

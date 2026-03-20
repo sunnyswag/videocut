@@ -42,6 +42,7 @@ export interface CombineItem {
 
 export interface Edits {
   deletes?: DeleteItem[];
+  restores?: DeleteItem[];
   textChanges?: TextChangeItem[];
   combines?: CombineItem[];
 }

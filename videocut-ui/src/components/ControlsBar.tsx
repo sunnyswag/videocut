@@ -30,6 +30,7 @@ interface ControlsBarProps {
   duration: number;
   isPlaying: boolean;
   onPlayPause: () => void;
+  onSaveReview: () => void;
 }
 
 export function ControlsBar({
@@ -38,6 +39,7 @@ export function ControlsBar({
   duration,
   isPlaying,
   onPlayPause,
+  onSaveReview,
 }: ControlsBarProps) {
   const { t } = useLocale();
 
@@ -64,6 +66,7 @@ export function ControlsBar({
         <span className="time-display">
           {formatTime(currentTime)}<span className="time-sep">/</span>{formatTime(duration)}
         </span>
+        <button className="btn-ghost" onClick={onSaveReview}>{t.saveReview}</button>
       </div>
     </div>
   );

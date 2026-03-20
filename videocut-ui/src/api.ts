@@ -1,4 +1,4 @@
-import type { Project, Word, CutResult, SubtitleStylePreset } from './types';
+import type { Project, Word, CutResult, SubtitleStylePreset, UserEditsPayload } from './types';
 
 const API_BASE = '/api';
 
@@ -18,16 +18,32 @@ export function getVideoUrl(projectId: string): string {
   return `${API_BASE}/video/${encodeURIComponent(projectId)}`;
 }
 
+export async function fetchVideoStatus(projectId: string): Promise<{ ready: boolean; generating: boolean; needsProxy: boolean }> {
+  const res = await fetch(`${API_BASE}/video-status/${encodeURIComponent(projectId)}`);
+  if (!res.ok) return { ready: true, generating: false, needsProxy: false };
+  return res.json();
+}
+
 export async function executeCut(
   projectId: string,
   deletes: Array<{ start: number; end: number }>,
   burnSubtitle: boolean = false,
-  subtitleStyle?: SubtitleStylePreset
+  subtitleStyle?: SubtitleStylePreset,
+  userEdits?: UserEditsPayload
 ): Promise<CutResult> {
   const res = await fetch(`${API_BASE}/cut/${encodeURIComponent(projectId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ deletes, burnSubtitle, subtitleStyle }),
+    body: JSON.stringify({ deletes, burnSubtitle, subtitleStyle, userEdits }),
+  });
+  return res.json();
+}
+
+export async function saveReview(projectId: string, userEdits: UserEditsPayload): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`${API_BASE}/save-review/${encodeURIComponent(projectId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userEdits),
   });
   return res.json();
 }

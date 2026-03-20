@@ -52,34 +52,43 @@ function App() {
         />
       )}
 
-      <div className="video-section">
-        {state.projects.map((project) => (
-          <video
-            key={project.id}
-            ref={(element) => state.registerVideoElement(project.id, element)}
-            className={`video-player ${project.id === state.currentProjectId ? 'active' : ''}`.trim()}
-            preload="auto"
-            playsInline
-            onTimeUpdate={() => state.handleVideoTimeUpdate(project.id)}
-          />
-        ))}
-        {state.burnSubtitle && (
-          <SubtitleOverlay
-            currentTime={state.currentTime}
-            words={state.words}
-            selected={state.selected}
-            stylePreset={state.subtitleStyle}
-          />
-        )}
-      </div>
+      <div className="video-player-container">
+        <div className="video-section">
+          {state.projects.map((project) => (
+            <video
+              key={project.id}
+              ref={(element) => state.registerVideoElement(project.id, element)}
+              className={`video-player ${project.id === state.currentProjectId ? 'active' : ''}`.trim()}
+              preload="auto"
+              playsInline
+              onTimeUpdate={() => state.handleVideoTimeUpdate(project.id)}
+            />
+          ))}
+          {state.currentProjectId && !state.videoReady[state.currentProjectId] && (
+            <div className="video-proxy-overlay">
+              <div className="video-proxy-spinner" />
+              <div className="video-proxy-text">{t.videoProxyGenerating}</div>
+            </div>
+          )}
+          {state.burnSubtitle && (
+            <SubtitleOverlay
+              currentTime={state.currentTime}
+              words={state.words}
+              selected={state.selected}
+              stylePreset={state.subtitleStyle}
+            />
+          )}
+        </div>
 
-      <ControlsBar
-        currentTime={state.currentTime}
-        duration={state.duration}
-        isPlaying={state.isPlaying}
-        videoRef={state.videoRef}
-        onPlayPause={state.handlePlayPause}
-      />
+        <ControlsBar
+          currentTime={state.currentTime}
+          duration={state.duration}
+          isPlaying={state.isPlaying}
+          videoRef={state.videoRef}
+          onPlayPause={state.handlePlayPause}
+          onSaveReview={state.handleSaveReview}
+        />
+      </div>
 
       <SubtitleStylePanel
         burnSubtitle={state.burnSubtitle}
@@ -126,11 +135,15 @@ function App() {
             selected={state.selected}
             autoSelected={state.autoSelected}
             currentWordIndex={state.currentWordIndex}
+            editingIndex={state.editingIndex}
             wordRefs={state.wordRefs}
             onWordClick={state.handleWordClick}
             onToggleWord={state.toggleWord}
             onWordMouseDown={state.handleWordMouseDown}
             onWordMouseEnter={state.handleWordMouseEnter}
+            onStartEdit={state.startEdit}
+            onCommitEdit={state.commitEdit}
+            onCancelEdit={state.cancelEdit}
           />
         </div>
       </div>

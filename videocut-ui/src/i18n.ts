@@ -15,6 +15,7 @@ export interface Translations {
   burnSubtitle: string;
   resetDefault: string;
   executeCut: string;
+  saveReview: string;
   instructions: string;
   helpClick: string;
   helpJumpPlay: string;
@@ -53,6 +54,8 @@ export interface Translations {
   requestFailed: string;
   ensureServer: string;
   copiedSegments: string;
+  reviewSaved: string;
+  reviewSaveFailed: string;
   formatMin: string;
   formatSec: string;
   estimateRemain: string;
@@ -70,10 +73,11 @@ export interface Translations {
   subtitleCopyPrompt: string;
   subtitlePromptCopied: string;
   subtitleUpcoming: string;
+  videoProxyGenerating: string;
 }
 
 const zh: Translations = {
-  review: '审核',
+  review: 'Review',
   batchExport: '批量导出',
   currentTab: '当前 Tab',
   mergeExecute: '导出',
@@ -84,6 +88,7 @@ const zh: Translations = {
   burnSubtitle: '字幕',
   resetDefault: '恢复默认',
   executeCut: '执行剪辑',
+  saveReview: '保存审阅',
   instructions: '操作说明',
   helpClick: '单击',
   helpJumpPlay: '跳转播放',
@@ -122,6 +127,8 @@ const zh: Translations = {
   requestFailed: '请求失败',
   ensureServer: '请确保使用 videocut review-server 启动服务',
   copiedSegments: '个删除片段已复制到剪贴板',
+  reviewSaved: '审阅结果已保存',
+  reviewSaveFailed: '审阅保存失败',
   formatMin: '分',
   formatSec: '秒',
   estimateRemain: '预估剩余',
@@ -139,6 +146,7 @@ const zh: Translations = {
   subtitleCopyPrompt: '复制提示词',
   subtitlePromptCopied: '提示词已复制',
   subtitleUpcoming: '内置自然语言生成样式将在下一阶段接入。',
+  videoProxyGenerating: '视频体积较大，正在生成预览版本，请稍候...',
 };
 
 const en: Translations = {
@@ -153,6 +161,7 @@ const en: Translations = {
   burnSubtitle: 'Subtitle',
   resetDefault: 'Reset',
   executeCut: 'Execute Cut',
+  saveReview: 'Save Review',
   instructions: 'Help',
   helpClick: 'Click',
   helpJumpPlay: 'jump & play',
@@ -191,6 +200,8 @@ const en: Translations = {
   requestFailed: 'Request failed',
   ensureServer: 'Make sure videocut review-server is running',
   copiedSegments: 'delete segment(s) copied to clipboard',
+  reviewSaved: 'Review changes saved',
+  reviewSaveFailed: 'Failed to save review changes',
   formatMin: 'm',
   formatSec: 's',
   estimateRemain: 'Estimated remaining',
@@ -208,6 +219,7 @@ const en: Translations = {
   subtitleCopyPrompt: 'Copy Prompt',
   subtitlePromptCopied: 'Prompt copied',
   subtitleUpcoming: 'Built-in natural language style generation will land in the next phase.',
+  videoProxyGenerating: 'Video is large — generating a preview version, please wait...',
 };
 
 const locales: Record<Locale, Translations> = { zh, en };

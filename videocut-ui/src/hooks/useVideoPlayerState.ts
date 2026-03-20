@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getVideoUrl } from '../api';
+import { getVideoUrl, fetchVideoStatus } from '../api';
 import type { Word } from '../types';
 
 interface Range {
@@ -82,39 +82,68 @@ export function useVideoPlayerState({
   const [duration, setDuration] = useState(0);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [videoReady, setVideoReady] = useState<Record<string, boolean>>({});
 
   const getVideoElement = useCallback(
     (projectId: string | null) => (projectId ? videoElementsRef.current[projectId] ?? null : null),
     [],
   );
 
+  const loadVideoSrc = useCallback((projectId: string, element: HTMLVideoElement) => {
+    if (element.dataset.srcReady) return;
+    element.preload = 'auto';
+    element.src = getVideoUrl(projectId);
+    element.load();
+    element.dataset.srcReady = 'true';
+  }, []);
+
   const registerVideoElement = useCallback(
     (projectId: string, element: HTMLVideoElement | null) => {
       videoElementsRef.current[projectId] = element;
       if (!element) return;
-      if (!element.dataset.srcReady) {
-        element.preload = 'auto';
-        element.src = getVideoUrl(projectId);
-        element.load();
-        element.dataset.srcReady = 'true';
+      if (videoReady[projectId]) {
+        loadVideoSrc(projectId, element);
       }
       if (projectId === currentProjectId) {
         videoRef.current = element;
       }
     },
-    [currentProjectId, videoRef],
+    [currentProjectId, videoRef, videoReady, loadVideoSrc],
   );
 
   useEffect(() => {
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    function pollStatus(projectId: string) {
+      fetchVideoStatus(projectId).then((status) => {
+        if (cancelled) return;
+        if (status.ready) {
+          setVideoReady((prev) => ({ ...prev, [projectId]: true }));
+          const video = videoElementsRef.current[projectId];
+          if (video) loadVideoSrc(projectId, video);
+        } else {
+          setVideoReady((prev) => ({ ...prev, [projectId]: false }));
+          const timer = setTimeout(() => { if (!cancelled) pollStatus(projectId); }, 2000);
+          timers.push(timer);
+        }
+      }).catch(() => {
+        if (cancelled) return;
+        setVideoReady((prev) => ({ ...prev, [projectId]: true }));
+      });
+    }
+
     projectIds.forEach((projectId) => {
-      const video = videoElementsRef.current[projectId];
-      if (!video || video.dataset.srcReady) return;
-      video.preload = 'auto';
-      video.src = getVideoUrl(projectId);
-      video.load();
-      video.dataset.srcReady = 'true';
+      if (videoReady[projectId]) {
+        const video = videoElementsRef.current[projectId];
+        if (video) loadVideoSrc(projectId, video);
+        return;
+      }
+      pollStatus(projectId);
     });
-  }, [projectIds]);
+
+    return () => { cancelled = true; timers.forEach(clearTimeout); };
+  }, [projectIds, loadVideoSrc]);
 
   useEffect(() => {
     const previousProjectId = lastProjectIdRef.current;
@@ -272,6 +301,7 @@ export function useVideoPlayerState({
     duration,
     currentWordIndex,
     isPlaying,
+    videoReady,
     registerVideoElement,
     handleVideoTimeUpdate,
     handlePlayPause,

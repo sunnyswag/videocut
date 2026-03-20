@@ -1,13 +1,23 @@
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execSync, exec } from 'child_process';
 import { fileURLToPath } from 'url';
 import { cutVideo, mergeProjectVideos, computeCutPlan } from '../core/video.js';
 import { applyEditsToOpted, deepClone, buildDeleteSegmentsFromDeletes } from '../core/edits.js';
 import { normalizeSubtitleStylePreset } from '../core/subtitle-style.js';
 import { generateSrt, buildSubtitlesFromEditedOpted, burnSubtitles } from '../core/subtitle.js';
-import type { Project, Utterance, DeleteSegment, Edits, SubtitleStylePreset } from '../core/types.js';
+import type {
+  Project,
+  Utterance,
+  DeleteSegment,
+  DeleteItem,
+  TextChangeItem,
+  CombineItem,
+  PathSet,
+  Edits,
+  SubtitleStylePreset,
+} from '../core/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,6 +49,61 @@ interface VideoProbe {
 }
 
 const REVIEW_PROXY_FILENAME = 'review_proxy.mp4';
+
+type ProxyStatus = 'not_needed' | 'generating' | 'ready' | 'error';
+const proxyStatusMap = new Map<string, ProxyStatus>();
+
+function getVideoStatusForProject(project: Project, rootPath: string): { ready: boolean; generating: boolean; needsProxy: boolean } {
+  const status = proxyStatusMap.get(project.id);
+  if (!status || status === 'not_needed') return { ready: true, generating: false, needsProxy: false };
+  if (status === 'ready') return { ready: true, generating: false, needsProxy: true };
+  if (status === 'error') return { ready: true, generating: false, needsProxy: false };
+  return { ready: false, generating: true, needsProxy: true };
+}
+
+function startBackgroundProxyGeneration(projects: Project[], rootPath: string): void {
+  for (const project of projects) {
+    const inputPath = findVideoFile(project, rootPath);
+    if (!inputPath) {
+      proxyStatusMap.set(project.id, 'not_needed');
+      continue;
+    }
+    if (!shouldUseReviewProxy(inputPath)) {
+      proxyStatusMap.set(project.id, 'not_needed');
+      continue;
+    }
+    const proxyPath = getReviewProxyPath(project);
+    if (hasFreshReviewProxy(inputPath, proxyPath)) {
+      proxyStatusMap.set(project.id, 'ready');
+      continue;
+    }
+
+    proxyStatusMap.set(project.id, 'generating');
+    console.log(`🎞️ Starting background proxy generation: ${project.id}`);
+
+    fs.mkdirSync(path.dirname(proxyPath), { recursive: true });
+    const tempPath = proxyPath.replace(/\.mp4$/i, `.tmp-${process.pid}.mp4`);
+    const filter = "scale='min(1920,iw)':-2:flags=lanczos,fps=30";
+    const cmd = `ffmpeg -y -i "file:${inputPath}" -vf "${filter}" -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -c:a aac -b:a 128k "file:${tempPath}"`;
+
+    exec(cmd, { maxBuffer: 1024 * 1024 * 16 }, (error) => {
+      if (error) {
+        console.warn(`⚠️ Failed to create review proxy for ${project.id}: ${error.message}`);
+        fs.rmSync(tempPath, { force: true });
+        proxyStatusMap.set(project.id, 'error');
+      } else {
+        try {
+          fs.renameSync(tempPath, proxyPath);
+          proxyStatusMap.set(project.id, 'ready');
+          console.log(`✅ Review proxy ready: ${project.id}`);
+        } catch (renameErr: any) {
+          console.warn(`⚠️ Failed to finalize proxy: ${renameErr.message}`);
+          proxyStatusMap.set(project.id, 'error');
+        }
+      }
+    });
+  }
+}
 
 function resolveProjectRoot(candidate: string): Project | null {
   const commonDir = path.join(candidate, 'common');
@@ -198,21 +263,15 @@ function createReviewProxy(inputPath: string, outputPath: string): void {
 function resolveReviewVideoPath(project: Project, rootPath: string): string | null {
   const inputPath = findVideoFile(project, rootPath);
   if (!inputPath) return null;
-  if (!shouldUseReviewProxy(inputPath)) return inputPath;
 
-  const proxyPath = getReviewProxyPath(project);
-  if (hasFreshReviewProxy(inputPath, proxyPath)) {
-    return proxyPath;
+  const status = proxyStatusMap.get(project.id);
+  if (!status || status === 'not_needed') return inputPath;
+  if (status === 'ready') {
+    const proxyPath = getReviewProxyPath(project);
+    return fs.existsSync(proxyPath) ? proxyPath : inputPath;
   }
-
-  try {
-    console.log(`🎞️ Creating review proxy: ${project.id}`);
-    createReviewProxy(inputPath, proxyPath);
-    return proxyPath;
-  } catch (err: any) {
-    console.warn(`⚠️ Failed to create review proxy, falling back to source video: ${err.message}`);
-    return inputPath;
-  }
+  if (status === 'error') return inputPath;
+  return null;
 }
 
 function flattenWords(opted: Utterance[]): FlattenedWord[] {
@@ -252,9 +311,10 @@ function flattenWords(opted: Utterance[]): FlattenedWord[] {
 
 function loadProjectWordsRaw(project: Project): { rawPath: string; opted: Utterance[] } {
   const commonDir = path.join(project.path, 'common');
+  const reviewPath = path.join(commonDir, 'subtitles_words_review.json');
   const editedPath = path.join(commonDir, 'subtitles_words_edited.json');
   const wordsPath = path.join(commonDir, 'subtitles_words.json');
-  const rawPath = fs.existsSync(editedPath) ? editedPath : wordsPath;
+  const rawPath = fs.existsSync(reviewPath) ? reviewPath : fs.existsSync(editedPath) ? editedPath : wordsPath;
   return {
     rawPath,
     opted: JSON.parse(fs.readFileSync(rawPath, 'utf8')),
@@ -265,6 +325,92 @@ interface NormalizedPayload {
   deletes: DeleteSegment[];
   burnSubtitle: boolean;
   subtitleStyle?: SubtitleStylePreset;
+}
+
+interface ReviewEditsPayload extends Edits {
+  restores?: DeleteItem[];
+}
+
+function toValidPathSet(pathSet: any): PathSet | null {
+  if (!pathSet || !Number.isInteger(pathSet.parent)) return null;
+  if (!Array.isArray(pathSet.children)) {
+    return { parent: pathSet.parent };
+  }
+  const children = pathSet.children.filter((child: unknown): child is number => Number.isInteger(child));
+  if (!children.length) return { parent: pathSet.parent };
+  return { parent: pathSet.parent, children: Array.from(new Set<number>(children)).sort((a, b) => a - b) };
+}
+
+function normalizeReviewEditsPayload(payload: any): ReviewEditsPayload {
+  const toDeleteItems = (items: any[] | undefined): DeleteItem[] => {
+    const result: DeleteItem[] = [];
+    for (const item of Array.isArray(items) ? items : []) {
+      const pathSet = toValidPathSet(item?.pathSet);
+      if (!pathSet) continue;
+      result.push({ pathSet, reason: typeof item?.reason === 'string' ? item.reason : undefined });
+    }
+    return result;
+  };
+
+  const toTextChanges = (items: any[] | undefined): TextChangeItem[] => {
+    const result: TextChangeItem[] = [];
+    for (const item of Array.isArray(items) ? items : []) {
+      const pathSet = toValidPathSet(item?.pathSet);
+      if (!pathSet || typeof item?.newText !== 'string' || typeof item?.oldText !== 'string') continue;
+      result.push({ pathSet, newText: item.newText, oldText: item.oldText });
+    }
+    return result;
+  };
+
+  const toCombines = (items: any[] | undefined): CombineItem[] => {
+    const result: CombineItem[] = [];
+    for (const item of Array.isArray(items) ? items : []) {
+      const pathSet = toValidPathSet(item?.pathSet);
+      if (!pathSet || typeof item?.newText !== 'string' || typeof item?.oldText !== 'string') continue;
+      result.push({
+        pathSet,
+        newText: item.newText,
+        oldText: item.oldText,
+        reason: typeof item?.reason === 'string' ? item.reason : undefined,
+      });
+    }
+    return result;
+  };
+
+  const deletes = toDeleteItems(payload?.deletes);
+  const restores = toDeleteItems(payload?.restores);
+  const textChanges = toTextChanges(payload?.textChanges);
+  const combines = toCombines(payload?.combines);
+  return { deletes, restores, textChanges, combines };
+}
+
+function getUserEditsPath(project: Project): string {
+  return path.join(project.path, '3_review', 'user_edits.json');
+}
+
+function getReviewSubtitlePath(project: Project): string {
+  return path.join(project.path, 'common', 'subtitles_words_review.json');
+}
+
+function getEditedSubtitleBasePath(project: Project): string {
+  const commonDir = path.join(project.path, 'common');
+  const editedPath = path.join(commonDir, 'subtitles_words_edited.json');
+  const fallbackPath = path.join(commonDir, 'subtitles_words.json');
+  return fs.existsSync(editedPath) ? editedPath : fallbackPath;
+}
+
+function saveReviewEdits(project: Project, payload: any) {
+  const userEdits = normalizeReviewEditsPayload(payload);
+  const userEditsPath = getUserEditsPath(project);
+  const reviewPath = getReviewSubtitlePath(project);
+  const basePath = getEditedSubtitleBasePath(project);
+  const baseOpted: Utterance[] = JSON.parse(fs.readFileSync(basePath, 'utf8'));
+  const reviewedOpted = applyEditsToOpted(deepClone(baseOpted), userEdits);
+
+  fs.mkdirSync(path.dirname(userEditsPath), { recursive: true });
+  fs.writeFileSync(userEditsPath, JSON.stringify(userEdits, null, 2), 'utf8');
+  fs.writeFileSync(reviewPath, JSON.stringify(reviewedOpted, null, 2), 'utf8');
+  return { userEditsPath, reviewPath, userEdits };
 }
 
 function normalizeEditsPayload(payload: any): NormalizedPayload {
@@ -339,6 +485,46 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
       return;
     }
 
+    const saveReviewMatch = urlPath.match(/^\/api\/save-review\/(.+)$/);
+    if (req.method === 'POST' && saveReviewMatch) {
+      const projectId = decodeURIComponent(saveReviewMatch[1]);
+      const project = getProjectById(rootPath, projectId);
+      if (!project) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Project not found' }));
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        try {
+          const payload = body ? JSON.parse(body) : {};
+          const { userEditsPath, reviewPath } = saveReviewEdits(project, payload);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, userEditsPath, reviewPath }));
+        } catch (err: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+      });
+      return;
+    }
+
+    const videoStatusMatch = urlPath.match(/^\/api\/video-status\/(.+)$/);
+    if (req.method === 'GET' && videoStatusMatch) {
+      const projectId = decodeURIComponent(videoStatusMatch[1]);
+      const project = getProjectById(rootPath, projectId);
+      if (!project) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Project not found' }));
+        return;
+      }
+      const status = getVideoStatusForProject(project, rootPath);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(status));
+      return;
+    }
+
     const videoMatch = urlPath.match(/^\/api\/video\/(.+)$/);
     if (req.method === 'GET' && videoMatch) {
       const projectId = decodeURIComponent(videoMatch[1]);
@@ -346,6 +532,12 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
       if (!project) {
         res.writeHead(404);
         res.end('Not Found');
+        return;
+      }
+      const videoStatus = getVideoStatusForProject(project, rootPath);
+      if (!videoStatus.ready) {
+        res.writeHead(202, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'generating' }));
         return;
       }
       const videoPath = resolveReviewVideoPath(project, rootPath);
@@ -408,6 +600,9 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
       req.on('end', () => {
         try {
           const requestPayload = JSON.parse(body);
+          if (requestPayload?.userEdits && typeof requestPayload.userEdits === 'object') {
+            saveReviewEdits(project, requestPayload.userEdits);
+          }
           const inputPath = findVideoFile(project, rootPath);
           if (!inputPath) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -604,6 +799,7 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
 
   server.listen(port, () => {
     const projects = getProjects(rootPath);
+    startBackgroundProxyGeneration(projects, rootPath);
     console.log(`
 🎬 Review server started
 📍 URL: http://localhost:${port}

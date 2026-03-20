@@ -51,6 +51,10 @@ export function applyEditsToOpted(inputOpted: Utterance[], edits: Edits = {}): U
     node.opt = 'del';
   });
 
+  processEditItems(opted, edits.restores, (node) => {
+    node.opt = 'keep';
+  });
+
   processEditItems(opted, edits.textChanges, (node, _parent, editItem) => {
     node.text = String((editItem as any).newText);
     node.opt = 'edit';

@@ -1,8 +1,9 @@
 import React from 'react';
 import { useMemo, useRef, useState } from 'react';
-import { executeCut, executeMergeCut } from '../api';
+import { executeCut, executeMergeCut, saveReview } from '../api';
+import { buildUserEdits } from '../buildUserEdits';
 import { useLocale, type Translations } from '../i18n';
-import type { Word, ProjectState, SubtitleStylePreset } from '../types';
+import type { Word, ProjectState, PendingTextChange, SubtitleStylePreset, UserEditsPayload } from '../types';
 import type { ExportDialogState, ExportDialogTone } from '../components/ExportDialog';
 
 type ExportMode = 'cut' | 'merge';
@@ -140,6 +141,11 @@ interface UseCutActionsProps {
   stateByProject: Record<string, ProjectState>;
   orderedProjectIds: string[];
   includedProjectIds: Set<string>;
+  projectWords: Word[];
+  projectSelected: Set<number>;
+  projectInitialAutoSelected: Set<number>;
+  pendingTextChanges: PendingTextChange[];
+  clearPendingTextChanges: () => void;
   duration: number;
   burnSubtitle: boolean;
   subtitleStyle: SubtitleStylePreset;
@@ -152,6 +158,11 @@ export function useCutActions({
   stateByProject,
   orderedProjectIds,
   includedProjectIds,
+  projectWords,
+  projectSelected,
+  projectInitialAutoSelected,
+  pendingTextChanges,
+  clearPendingTextChanges,
   duration,
   burnSubtitle,
   subtitleStyle,
@@ -234,6 +245,28 @@ export function useCutActions({
     showMessageDialog('info', t.instructions, `${merged.length} ${t.copiedSegments}`);
   };
 
+  const persistCurrentReview = async (showSuccessMessage: boolean): Promise<UserEditsPayload | null> => {
+    if (!currentProjectId || !currentState) return null;
+    const userEdits = buildUserEdits(projectWords, projectSelected, projectInitialAutoSelected, pendingTextChanges);
+    const result = await saveReview(currentProjectId, userEdits);
+    if (!result.success) {
+      throw new Error(result.error || t.reviewSaveFailed);
+    }
+    clearPendingTextChanges();
+    if (showSuccessMessage) {
+      showMessageDialog('success', t.saveReview, t.reviewSaved);
+    }
+    return userEdits;
+  };
+
+  const handleSaveReview = async () => {
+    try {
+      await persistCurrentReview(true);
+    } catch (err: any) {
+      showMessageDialog('error', t.reviewSaveFailed, `❌ ${t.reviewSaveFailed}: ${err.message}`);
+    }
+  };
+
   const handleExecuteCut = async () => {
     if (!currentProjectId || !currentState) return;
     const payload = buildEditsPayload(currentState.words, currentState.selected, burnSubtitle);
@@ -260,6 +293,14 @@ export function useCutActions({
     if (!confirmed)
       return;
 
+    let userEdits: UserEditsPayload | null = null;
+    try {
+      userEdits = await persistCurrentReview(false);
+    } catch (err: any) {
+      showMessageDialog('error', t.reviewSaveFailed, `❌ ${t.reviewSaveFailed}: ${err.message}`);
+      return;
+    }
+
     if (videoRef.current && !videoRef.current.paused) {
       videoRef.current.pause();
     }
@@ -272,7 +313,7 @@ export function useCutActions({
     }, 500);
 
     try {
-      const data = await executeCut(currentProjectId, payload.deletes, burnSubtitle, subtitleStyle);
+      const data = await executeCut(currentProjectId, payload.deletes, burnSubtitle, subtitleStyle, userEdits || undefined);
       clearInterval(timer);
       setLoading({ show: false, elapsed: 0, estimate: 0 });
       const elapsedSeconds = (Date.now() - start) / 1000;
@@ -399,6 +440,7 @@ export function useCutActions({
     handleDialogConfirm,
     handleDialogCancel,
     handleCopyDeleteList,
+    handleSaveReview,
     handleExecuteCut,
     handleExecuteMergeCut,
   };
