@@ -104,7 +104,9 @@ export async function transcribe(
 
   let submitResponse: Response;
   if (hotwords.length > 0) {
-    submitResponse = await submitWithPayload({ url: audioUrl, hot_words: hotwords });
+    // Volcengine expects `hot_words` as an array of objects, not string array.
+    const hotwordPayload = hotwords.map((word) => ({ word }));
+    submitResponse = await submitWithPayload({ url: audioUrl, hot_words: hotwordPayload });
     if (!submitResponse.ok) {
       const errBody = await submitResponse.text();
       console.warn(`⚠️ 热词提交失败，回退为普通转写: ${submitResponse.status}`);
