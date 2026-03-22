@@ -62,6 +62,12 @@ interface UseVideoPlayerStateProps {
   stateByProject: Record<string, ProjectState>;
 }
 
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || target.isContentEditable;
+}
+
 export function useVideoPlayerState({
   videoRef,
   wordRefs,
@@ -71,6 +77,7 @@ export function useVideoPlayerState({
   stateByProject,
 }: UseVideoPlayerStateProps) {
   const skipRafRef = useRef<number | null>(null);
+  const skipSeekTargetRef = useRef<number | null>(null);
   const videoElementsRef = useRef<Record<string, HTMLVideoElement | null>>({});
   const timeByProjectRef = useRef<Record<string, number>>({});
   const lastProjectIdRef = useRef<string | null>(null);
@@ -177,6 +184,7 @@ export function useVideoPlayerState({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
       const video = videoRef.current;
       if (!video) return;
       if (e.code === 'Space') {
@@ -230,15 +238,26 @@ export function useVideoPlayerState({
         skipRafRef.current = null;
         return;
       }
+      if (video.seeking) {
+        skipRafRef.current = requestAnimationFrame(tick);
+        return;
+      }
       const t = video.currentTime;
       const ranges = selectedRangesRef.current;
       for (let i = 0; i < ranges.length; i += 1) {
         const range = ranges[i];
         if (t >= range.start && t < range.end) {
-          video.currentTime = range.end;
-          break;
+          const durationLimit = Number.isFinite(video.duration) ? Math.max(0, video.duration - 0.01) : range.end + 0.01;
+          const seekTarget = Math.min(range.end + 0.01, durationLimit);
+          if (skipSeekTargetRef.current !== seekTarget) {
+            skipSeekTargetRef.current = seekTarget;
+            video.currentTime = seekTarget;
+          }
+          skipRafRef.current = requestAnimationFrame(tick);
+          return;
         }
       }
+      skipSeekTargetRef.current = null;
       skipRafRef.current = requestAnimationFrame(tick);
     };
 

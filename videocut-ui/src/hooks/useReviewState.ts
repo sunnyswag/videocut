@@ -1,4 +1,5 @@
-import { useRef } from 'react';
+import { useCallback, useRef } from 'react';
+import { useLocale } from '../i18n';
 import { useProjectDataState } from './useProjectDataState';
 import { useVideoPlayerState } from './useVideoPlayerState';
 import { useSelectionState } from './useSelectionState';
@@ -6,6 +7,7 @@ import { useEditState } from './useEditState';
 import { useCutActions } from './useCutActions';
 
 export function useReviewState() {
+  const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
   const wordRefs = useRef<(HTMLDivElement | null)[]>([]);
   const projectState = useProjectDataState();
@@ -45,6 +47,12 @@ export function useReviewState() {
     clearPendingTextChanges: editState.clearPendingTextChanges,
     videoRef,
   });
+
+  const handleResetToDefault = useCallback(async () => {
+    const confirmed = await cutState.requestConfirmDialog(t.resetDefault, t.resetDefaultConfirmMessage);
+    if (!confirmed) return;
+    selectionState.resetToDefault();
+  }, [cutState, selectionState, t]);
 
   return {
     videoRef,
@@ -89,7 +97,7 @@ export function useReviewState() {
     setBurnSubtitle: projectState.setBurnSubtitle,
     applySubtitleStyle: projectState.applySubtitleStyle,
     setSubtitleStyleJson: projectState.setSubtitleStyleJson,
-    handleResetToDefault: selectionState.handleResetToDefault,
+    handleResetToDefault,
     handleWordClick: selectionState.handleWordClick,
     toggleWord: selectionState.toggleWord,
     handleWordMouseDown: selectionState.handleWordMouseDown,

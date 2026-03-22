@@ -69,7 +69,7 @@ node videocut-cli/bin/videocut.js review-server 8899 -p output/
 ## Project Structure
 
 ```
-videocut-skills-test/
+videocut-skill/
 ├── videocut-cli/              # CLI package (TypeScript + Commander)
 │   ├── bin/                   #   Entry script
 │   ├── src/

@@ -72,5 +72,5 @@ If `--hotwords` is provided, the list is submitted to Volcengine ASR and also re
 
 ## Related Project
 
-- Skills repository: `videocut-skills`
+- Skills repository: `videocut-skill`
 - Repository: [https://github.com/sunnyswag/videocut](https://github.com/sunnyswag/videocut)

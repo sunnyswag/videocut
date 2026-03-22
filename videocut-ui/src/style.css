@@ -329,16 +329,17 @@ h1 {
 }
 
 .video-proxy-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 5;
+  z-index: 9998;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 16px;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
+  background: rgba(10, 10, 10, 0.82);
+  backdrop-filter: blur(12px);
+  animation: fadeIn 0.2s ease;
 }
 
 .video-proxy-spinner {
@@ -956,8 +957,8 @@ input[type="checkbox"] {
 }
 
 .word-inline-input {
-  width: 2em;
   min-width: 1.5em;
+  width: auto;
   height: 24px;
   border: 1px solid var(--accent-color);
   border-radius: 4px;

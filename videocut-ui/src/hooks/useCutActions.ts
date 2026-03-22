@@ -439,6 +439,7 @@ export function useCutActions({
     progressText,
     handleDialogConfirm,
     handleDialogCancel,
+    requestConfirmDialog,
     handleCopyDeleteList,
     handleSaveReview,
     handleExecuteCut,

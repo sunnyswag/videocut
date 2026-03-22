@@ -8,7 +8,7 @@ export async function fetchProjects(): Promise<Project[]> {
   return res.json();
 }
 
-export async function fetchProjectData(projectId: string): Promise<{ words: Word[]; autoSelected: number[] }> {
+export async function fetchProjectData(projectId: string): Promise<{ words: Word[]; autoSelected: number[]; baseAutoSelected?: number[] }> {
   const res = await fetch(`${API_BASE}/data/${encodeURIComponent(projectId)}`);
   if (!res.ok) throw new Error(`Failed to fetch project data: ${res.status}`);
   return res.json();

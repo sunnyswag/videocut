@@ -58,7 +58,7 @@ function buildCues(words: Word[], selected: Set<number>): SubtitleCue[] {
 
   words.forEach((word, index) => {
     const text = (word.text || '').trim();
-    const deleted = selected.has(index) || word.opt === 'del';
+    const deleted = selected.has(index);
     const isBlank = !text;
     if (deleted || isBlank) {
       flush();

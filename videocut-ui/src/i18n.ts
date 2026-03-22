@@ -21,6 +21,10 @@ export interface Translations {
   helpJumpPlay: string;
   helpDblClick: string;
   helpSelectToggle: string;
+  helpRightClick: string;
+  helpEditWord: string;
+  helpEnterEsc: string;
+  helpSaveCancel: string;
   helpShiftDrag: string;
   helpBatch: string;
   helpSpace: string;
@@ -74,6 +78,7 @@ export interface Translations {
   subtitlePromptCopied: string;
   subtitleUpcoming: string;
   videoProxyGenerating: string;
+  resetDefaultConfirmMessage: string;
 }
 
 const zh: Translations = {
@@ -94,6 +99,10 @@ const zh: Translations = {
   helpJumpPlay: '跳转播放',
   helpDblClick: '双击',
   helpSelectToggle: '选中/取消',
+  helpRightClick: '右键',
+  helpEditWord: '编辑文本',
+  helpEnterEsc: 'Enter / Esc',
+  helpSaveCancel: '保存 / 取消编辑',
   helpShiftDrag: 'Shift+拖动',
   helpBatch: '批量操作',
   helpSpace: '空格',
@@ -147,6 +156,7 @@ const zh: Translations = {
   subtitlePromptCopied: '提示词已复制',
   subtitleUpcoming: '内置自然语言生成样式将在下一阶段接入。',
   videoProxyGenerating: '视频体积较大，正在生成预览版本，请稍候...',
+  resetDefaultConfirmMessage: '恢复到上一次保存的编辑状态。',
 };
 
 const en: Translations = {
@@ -167,6 +177,10 @@ const en: Translations = {
   helpJumpPlay: 'jump & play',
   helpDblClick: 'Double-click',
   helpSelectToggle: 'select / deselect',
+  helpRightClick: 'Right-click',
+  helpEditWord: 'edit text',
+  helpEnterEsc: 'Enter / Esc',
+  helpSaveCancel: 'save / cancel editing',
   helpShiftDrag: 'Shift+Drag',
   helpBatch: 'batch select',
   helpSpace: 'Space',
@@ -220,6 +234,7 @@ const en: Translations = {
   subtitlePromptCopied: 'Prompt copied',
   subtitleUpcoming: 'Built-in natural language style generation will land in the next phase.',
   videoProxyGenerating: 'Video is large — generating a preview version, please wait...',
+  resetDefaultConfirmMessage: 'Restore to the last saved edit state.',
 };
 
 const locales: Record<Locale, Translations> = { zh, en };

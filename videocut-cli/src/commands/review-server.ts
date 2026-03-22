@@ -331,6 +331,14 @@ interface ReviewEditsPayload extends Edits {
   restores?: DeleteItem[];
 }
 
+function pathSetKey(pathSet: PathSet): string {
+  if (!Array.isArray(pathSet.children) || pathSet.children.length === 0) {
+    return `${pathSet.parent}:*`;
+  }
+  const children = Array.from(new Set(pathSet.children)).sort((a, b) => a - b);
+  return `${pathSet.parent}:${children.join(',')}`;
+}
+
 function toValidPathSet(pathSet: any): PathSet | null {
   if (!pathSet || !Number.isInteger(pathSet.parent)) return null;
   if (!Array.isArray(pathSet.children)) {
@@ -400,10 +408,45 @@ function getEditedSubtitleBasePath(project: Project): string {
 }
 
 function saveReviewEdits(project: Project, payload: any) {
-  const userEdits = normalizeReviewEditsPayload(payload);
+  const incomingEdits = normalizeReviewEditsPayload(payload);
   const userEditsPath = getUserEditsPath(project);
   const reviewPath = getReviewSubtitlePath(project);
   const basePath = getEditedSubtitleBasePath(project);
+  let existingEdits: ReviewEditsPayload = { deletes: [], restores: [], textChanges: [], combines: [] };
+
+  if (fs.existsSync(userEditsPath)) {
+    try {
+      existingEdits = normalizeReviewEditsPayload(JSON.parse(fs.readFileSync(userEditsPath, 'utf8')));
+    } catch {
+      existingEdits = { deletes: [], restores: [], textChanges: [], combines: [] };
+    }
+  }
+
+  const mergedTextChangeMap = new Map<string, TextChangeItem>();
+  for (const item of existingEdits.textChanges || []) {
+    mergedTextChangeMap.set(pathSetKey(item.pathSet), item);
+  }
+  for (const item of incomingEdits.textChanges || []) {
+    mergedTextChangeMap.set(pathSetKey(item.pathSet), item);
+  }
+
+  const mergedCombineMap = new Map<string, CombineItem>();
+  for (const item of existingEdits.combines || []) {
+    mergedCombineMap.set(pathSetKey(item.pathSet), item);
+  }
+  for (const item of incomingEdits.combines || []) {
+    mergedCombineMap.set(pathSetKey(item.pathSet), item);
+  }
+
+  const userEdits: ReviewEditsPayload = {
+    // Deletes/restores are full snapshot from current selection state.
+    deletes: incomingEdits.deletes || [],
+    restores: incomingEdits.restores || [],
+    // Text/combines are incremental edits from UI, merge with history by path.
+    textChanges: Array.from(mergedTextChangeMap.values()).sort((a, b) => a.pathSet.parent - b.pathSet.parent),
+    combines: Array.from(mergedCombineMap.values()).sort((a, b) => a.pathSet.parent - b.pathSet.parent),
+  };
+
   const baseOpted: Utterance[] = JSON.parse(fs.readFileSync(basePath, 'utf8'));
   const reviewedOpted = applyEditsToOpted(deepClone(baseOpted), userEdits);
 
@@ -470,14 +513,26 @@ export function reviewServer(port: number = 8899, options: { path?: string }): v
         return;
       }
       try {
-        const { opted } = loadProjectWordsRaw(project);
+        const { opted, rawPath } = loadProjectWordsRaw(project);
         const words = flattenWords(opted);
         const autoSelected: number[] = [];
         words.forEach((w, i) => {
           if (w.opt === 'del') autoSelected.push(i);
         });
+        const basePath = getEditedSubtitleBasePath(project);
+        let baseAutoSelected: number[] | undefined;
+        if (rawPath !== basePath) {
+          try {
+            const baseOpted: Utterance[] = JSON.parse(fs.readFileSync(basePath, 'utf8'));
+            const baseWords = flattenWords(baseOpted);
+            baseAutoSelected = [];
+            baseWords.forEach((w, i) => {
+              if (w.opt === 'del') baseAutoSelected!.push(i);
+            });
+          } catch {}
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ words, autoSelected }));
+        res.end(JSON.stringify({ words, autoSelected, baseAutoSelected }));
       } catch (err: any) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));

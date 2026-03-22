@@ -42,12 +42,15 @@ export function useProjectDataState() {
     const projectWords = data.words || [];
     const projectAutoSelected = new Set<number>(Array.isArray(data.autoSelected) ? data.autoSelected : []);
     const projectSelected = new Set<number>(projectAutoSelected);
+    const baseAuto = Array.isArray(data.baseAutoSelected)
+      ? new Set<number>(data.baseAutoSelected)
+      : projectAutoSelected;
     setStateByProject((prev) => ({
       ...prev,
       [projectId]: {
         words: projectWords,
-        initialAutoSelected: new Set(projectAutoSelected),
-        autoSelected: projectAutoSelected,
+        initialAutoSelected: new Set(baseAuto),
+        autoSelected: new Set(baseAuto),
         selected: projectSelected,
         editingIndex: null,
         pendingTextChanges: [],

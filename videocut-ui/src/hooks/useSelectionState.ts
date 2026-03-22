@@ -79,7 +79,7 @@ export function useSelectionState({
     video.currentTime = word.start;
   };
 
-  const handleResetToDefault = () => {
+  const resetToDefault = () => {
     if (!currentProjectId) return;
     setProjectState(currentProjectId, (state) => ({
       ...state,
@@ -93,6 +93,6 @@ export function useSelectionState({
     handleWordMouseDown,
     handleWordMouseEnter,
     handleWordClick,
-    handleResetToDefault,
+    resetToDefault,
   };
 }

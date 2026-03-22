@@ -72,6 +72,13 @@ const WordItem = memo<WordItemProps>(
             defaultValue={word.text}
             size={Math.max(1, word.text.length)}
             onClick={(e) => e.stopPropagation()}
+            onFocus={(e) => {
+              e.currentTarget.select();
+            }}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.size = Math.max(1, el.value.length);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') onCommitEdit(index, e.currentTarget.value);
               if (e.key === 'Escape') onCancelEdit();

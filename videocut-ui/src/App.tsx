@@ -25,6 +25,12 @@ function App() {
         progressPercentLabel={state.progressPercentLabel}
         progressText={state.progressText}
       />
+      {state.currentProjectId && state.videoReady[state.currentProjectId] === false && (
+        <div className="video-proxy-overlay">
+          <div className="video-proxy-spinner" />
+          <div className="video-proxy-text">{t.videoProxyGenerating}</div>
+        </div>
+      )}
       <ExportDialog dialog={state.exportDialog} onConfirm={state.handleDialogConfirm} onCancel={state.handleDialogCancel} />
 
       <header className="header">
@@ -64,12 +70,7 @@ function App() {
               onTimeUpdate={() => state.handleVideoTimeUpdate(project.id)}
             />
           ))}
-          {state.currentProjectId && !state.videoReady[state.currentProjectId] && (
-            <div className="video-proxy-overlay">
-              <div className="video-proxy-spinner" />
-              <div className="video-proxy-text">{t.videoProxyGenerating}</div>
-            </div>
-          )}
+          {/* proxy overlay moved to full-screen level */}
           {state.burnSubtitle && (
             <SubtitleOverlay
               currentTime={state.currentTime}
@@ -87,6 +88,7 @@ function App() {
           videoRef={state.videoRef}
           onPlayPause={state.handlePlayPause}
           onSaveReview={state.handleSaveReview}
+          onExecuteCut={state.handleExecuteCut}
         />
       </div>
 
@@ -116,6 +118,10 @@ function App() {
               <span><b>{t.helpClick}</b> {t.helpJumpPlay}</span>
               <span className="help-sep">·</span>
               <span><b>{t.helpDblClick}</b> {t.helpSelectToggle}</span>
+              <span className="help-sep">·</span>
+              <span><b>{t.helpRightClick}</b> {t.helpEditWord}</span>
+              <span className="help-sep">·</span>
+              <span><b>{t.helpEnterEsc}</b> {t.helpSaveCancel}</span>
               <span className="help-sep">·</span>
               <span><b>{t.helpShiftDrag}</b> {t.helpBatch}</span>
               <span className="help-sep">·</span>
