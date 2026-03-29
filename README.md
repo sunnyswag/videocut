@@ -14,7 +14,7 @@ A CLI toolkit and web-based review UI for cutting talking-head / podcast videos.
 
 ```bash
 # Install the CLI globally
-npm install -g @videocut/cli
+npm install -g @huiqinghuang/videocut-cli
 
 # Transcribe a video
 videocut transcribe video.mp4 -o output/
