@@ -7,6 +7,7 @@ output/
 videos/
 macro_notes/
 .trae/
+.claude/
 
 # test scripts
 videocut-cli/test_*.mjs

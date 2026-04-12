@@ -74,6 +74,14 @@ export function generateSubtitles(
 
   loopItems(source.utterances);
 
+  const totalDurationMs = typeof source.duration === 'number' ? source.duration * 1000 : 0;
+  if (totalDurationMs > 0 && source.utterances.length > 0) {
+    const lastEnd = source.utterances[source.utterances.length - 1].end_time ?? 0;
+    if (totalDurationMs - lastEnd > GAP_MS) {
+      source.utterances.push(makeGapNode(lastEnd, Math.round(totalDurationMs)));
+    }
+  }
+
   const outDir = path.dirname(path.dirname(sourceFile));
   const outFile = options.output || path.join(outDir, 'common', 'subtitles_words.json');
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
