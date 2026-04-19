@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import type { DeleteSegment, CutResult } from './types.js';
+import type { DeleteSegment } from './types.js';
 
 const BUFFER_MS = 50;
 const CROSSFADE_MS = 30;
@@ -73,10 +73,6 @@ function getEncoder(): Encoder {
   return cachedEncoder;
 }
 
-export function getPreferredEncoder(): { name: string; args: string; label: string } {
-  return getEncoder();
-}
-
 function getAudioOffset(projectPath: string | undefined): number {
   if (!projectPath) return 0;
   const audioPath = path.join(projectPath, '1_transcribe', 'audio.mp3');
@@ -119,21 +115,6 @@ interface CutPlan {
   crossfadeSec: number;
   mergedDelete: DeleteSegment[];
   keepSegments: DeleteSegment[];
-}
-
-interface MergeProjectInput {
-  projectId: string;
-  inputPath: string;
-  deleteList: DeleteSegment[];
-  projectPath?: string;
-}
-
-interface MergeCutResult {
-  outputPath: string;
-  originalDuration: number;
-  newDuration: number;
-  projectCount: number;
-  segmentCount: number;
 }
 
 export function computeCutPlan(
@@ -224,9 +205,10 @@ function executeFFmpegCutFallback(
   inputPath: string,
   keepSegments: DeleteSegment[],
   outputPath: string
-): void {
+): number[] {
   const tmpDir = `tmp_cut_${Date.now()}`;
   fs.mkdirSync(tmpDir, { recursive: true });
+  const renderedDurations: number[] = [];
 
   try {
     const partFiles: string[] = [];
@@ -238,9 +220,11 @@ function executeFFmpegCutFallback(
       console.log(`切割片段 ${i + 1}/${keepSegments.length}: ${seg.start.toFixed(2)}s - ${seg.end.toFixed(2)}s`);
       execSync(cmd, { stdio: 'pipe' });
       partFiles.push(partFile);
+      renderedDurations.push(getVideoDuration(partFile));
     });
 
     concatRenderedFiles(partFiles, outputPath, tmpDir);
+    return renderedDurations;
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -251,13 +235,21 @@ export function renderKeepSegments(
   keepSegments: DeleteSegment[],
   outputPath: string,
   crossfadeSec: number = CROSSFADE_MS / 1000
-): void {
+): number[] {
   if (!Array.isArray(keepSegments) || keepSegments.length === 0) {
     throw new Error('keepSegments 不能为空');
   }
 
   const filterComplex = buildFilterComplex(keepSegments, crossfadeSec);
   const encoder = getEncoder();
+  const complexThreshold = 20;
+  const theoreticalDurations = keepSegments.map((s) => s.end - s.start);
+  if (keepSegments.length > complexThreshold) {
+    console.log(
+      `✂️ 片段数 ${keepSegments.length} > ${complexThreshold}，跳过单命令 filter_complex，直接分段（${encoder.label}）...`
+    );
+    return executeFFmpegCutFallback(inputPath, keepSegments, outputPath);
+  }
   console.log(`✂️ 执行 FFmpeg 精确剪辑（${encoder.label}）...`);
 
   const cmd = `ffmpeg -y -i "file:${inputPath}" -filter_complex "${filterComplex}" -map "[outv]" -map "[outa]" -c:v ${encoder.name} ${encoder.args} -c:a aac -b:a 192k "file:${outputPath}"`;
@@ -265,83 +257,12 @@ export function renderKeepSegments(
   try {
     execSync(cmd, { stdio: 'pipe' });
     console.log(`✅ 输出: ${outputPath}`);
-  } catch {
-    console.error('FFmpeg 执行失败，尝试分段方案...');
-    executeFFmpegCutFallback(inputPath, keepSegments, outputPath);
-  }
-}
-
-export function cutVideo(
-  inputPath: string,
-  deleteList: DeleteSegment[],
-  outputPath: string,
-  projectPath?: string
-): CutResult {
-  if (!Array.isArray(deleteList) || deleteList.length === 0) {
-    throw new Error('deleteList 不能为空');
-  }
-
-  const plan = computeCutPlan(inputPath, deleteList, projectPath);
-  if (plan.keepSegments.length === 0) {
-    throw new Error('删除范围覆盖整个视频，无法输出空视频');
-  }
-
-  console.log(`⚙️ 优化参数: 扩展范围=${BUFFER_MS}ms, 音频crossfade=${CROSSFADE_MS}ms`);
-  console.log(`保留 ${plan.keepSegments.length} 个片段，删除 ${plan.mergedDelete.length} 个片段`);
-  renderKeepSegments(inputPath, plan.keepSegments, outputPath, plan.crossfadeSec);
-
-  const newDuration = getVideoDuration(outputPath);
-  console.log(`📹 新时长: ${newDuration.toFixed(2)}s`);
-
-  return {
-    outputPath,
-    keepSegments: plan.keepSegments,
-    mergedDelete: plan.mergedDelete,
-    audioOffset: plan.audioOffset,
-    originalDuration: plan.duration,
-    newDuration,
-  };
-}
-
-export function mergeProjectVideos(projects: MergeProjectInput[], outputPath: string): MergeCutResult {
-  if (!Array.isArray(projects) || projects.length === 0) {
-    throw new Error('projects 不能为空');
-  }
-
-  const outputDir = path.dirname(outputPath);
-  fs.mkdirSync(outputDir, { recursive: true });
-  const tmpDir = path.join(outputDir, `.tmp_merge_${Date.now()}`);
-  fs.mkdirSync(tmpDir, { recursive: true });
-
-  let totalOriginalDuration = 0;
-  const renderedFiles: string[] = [];
-
-  try {
-    projects.forEach((project, index) => {
-      const plan = computeCutPlan(project.inputPath, project.deleteList, project.projectPath);
-      totalOriginalDuration += plan.duration;
-      if (plan.keepSegments.length === 0) {
-        console.log(`⏭️ 跳过空项目: ${project.projectId}`);
-        return;
-      }
-
-      const renderedPath = path.join(tmpDir, `project_${index.toString().padStart(2, '0')}.mp4`);
-      console.log(`\n📦 渲染项目 ${index + 1}/${projects.length}: ${project.projectId}`);
-      console.log(`保留 ${plan.keepSegments.length} 个片段，删除 ${plan.mergedDelete.length} 个片段`);
-      renderKeepSegments(project.inputPath, plan.keepSegments, renderedPath, plan.crossfadeSec);
-      renderedFiles.push(renderedPath);
-    });
-
-    concatRenderedFiles(renderedFiles, outputPath, tmpDir);
-    const newDuration = getVideoDuration(outputPath);
-    return {
-      outputPath,
-      originalDuration: totalOriginalDuration,
-      newDuration,
-      projectCount: projects.length,
-      segmentCount: renderedFiles.length,
-    };
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    return theoreticalDurations;
+  } catch (err) {
+    const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? '';
+    const tail = stderr.split(/\r?\n/).filter(Boolean).slice(-6).join('\n');
+    console.error('FFmpeg 精确剪辑失败，尝试分段方案...');
+    if (tail) console.error(`  ffmpeg stderr (tail):\n    ${tail.replace(/\n/g, '\n    ')}`);
+    return executeFFmpegCutFallback(inputPath, keepSegments, outputPath);
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "@huiqinghuang/videocut-cli",
-  "version": "1.0.5",
-  "description": "Video clipping CLI tool for podcast videos",
+  "version": "2.0.0",
+  "description": "Local faster-whisper ASR + AI 粗剪 + ffmpeg 输出 CLI",
   "type": "module",
   "bin": {
     "videocut": "./bin/videocut.js"
@@ -9,7 +9,7 @@
   "files": [
     "dist",
     "bin",
-    "static"
+    "python"
   ],
   "scripts": {
     "build": "tsc",

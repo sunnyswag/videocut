@@ -1,76 +1,102 @@
-# videocut CLI
+# @huiqinghuang/videocut-cli
 
-`videocut` is a command-line tool for talking-head video workflows. It handles transcription, subtitle structuring, human-readable review output, edit application, review UI hosting, and final cutting based on approved delete segments.
+本地 faster-whisper ASR + AI 粗剪 + ffmpeg 输出 CLI。适合口播 / 播客 / 教程类视频。
 
-## Installation
+## 安装
 
 ```bash
+# CLI
 npm install -g @huiqinghuang/videocut-cli
+
+# ASR 后端（venv，因为现代 Debian/Ubuntu 的 PEP 668 不让 pip 装到系统 Python）
+python3 -m venv .venv
+.venv/bin/pip install faster-whisper
+export VIDEOCUT_PYTHON="$PWD/.venv/bin/python"   # 或每次 --python 指定
 ```
 
-After installation, verify that the command is available:
+需要 Node 18+、ffmpeg、ffprobe、Python 3.10+。
+
+**可选：启用 GPU**（约 10× 速度，默认没装是正常现象，Python 端会自动回退到 CPU）：
 
 ```bash
-videocut --help
+.venv/bin/pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
 ```
 
-## Requirements
+## 命令一览
 
-- Node.js 18+
-- FFmpeg
-- Volcengine speech transcription API key: `VOLCENGINE_API_KEY`
+| 命令 | 作用 |
+|---|---|
+| `videocut transcribe <video>` | 本地 faster-whisper 转录 → `transcript.srt` + `transcript.words.json` |
+| `videocut analyze-signals <video>` | ffmpeg 静音检测 → `signals.json` |
+| `videocut process <video>` | 一键跑 transcribe + analyze-signals（粗剪前的单步命令） |
+| `videocut suggest-edits <baseDir>` | 扫 transcript + signals → `edits.candidates.json`（机械骨架） |
+| `videocut cut <video> <edits.json>` | 按 `edits.json` 剪切 → `edited.mp4` + `edited.srt` |
 
-Example:
+所有命令支持 `--help` 看全部 flag。
+
+## 典型工作流
 
 ```bash
-export VOLCENGINE_API_KEY="your_api_key"
+# 1. 转录 + 信号分析（自动建 inputs/ work/ final/ 三目录）
+videocut process input.mp4 -o output/demo --hotwords hotwords.txt
+
+# 2. 可选：机械骨架
+videocut suggest-edits output/demo
+# → output/demo/work/edits.candidates.json
+
+# 3. （LLM）读 transcript.srt + signals.json + candidates
+#    写 output/demo/work/edits.json + analysis.md
+#    格式见 .cursor/skills/videocut/edits.example.json
+
+# 4. 剪辑（默认输出到 final/）
+videocut cut output/demo/inputs/source.mp4 output/demo/work/edits.json
+# 产出 output/demo/final/edited.mp4 + edited.srt
 ```
 
-## Commands
+## 输出目录
 
-```bash
-videocut transcribe <video> -o <output-dir> [--hotwords <hotwords.txt>]
-videocut generate-subtitles <volcengine-result.json> -o <subtitles.json>
-videocut generate-readable <subtitles.json> -o <readable.txt>
-videocut apply-edits <subtitles.json> <edits.json> -o <subtitles-edited.json>
-videocut review-server 8899 --path <project-or-output-root>
-videocut cut <video> <delete-segments.json> -o <output-video>
+```
+output/<BASE>/
+├── inputs/            # source.<ext>（CLI 软链）、video_script.md（用户放）
+├── work/              # transcript.srt、signals.json、edits.json、edits.candidates.json、analysis.md、hotwords.txt
+└── final/             # edited.mp4、edited.srt
 ```
 
-## Typical Workflow
+## edits.json 格式（精简版）
 
-```bash
-# 1. Transcribe the video
-videocut transcribe input.mp4 -o output/demo --hotwords hotwords.txt
-
-# 2. Build the subtitle structure
-videocut generate-subtitles output/demo/1_transcribe/volcengine_result.json
-
-# 3. Generate readable review text for AI or human review
-videocut generate-readable output/demo/common/subtitles_words.json -o output/demo/2_analysis/readable.txt
-
-# 4. Apply edits from edits.json back to the structured subtitles
-videocut apply-edits output/demo/common/subtitles_words.json output/demo/2_analysis/edits.json
-
-# 5. Start the review server
-videocut review-server 8899 --path output/demo
+```json
+{
+  "schema_version": 2,
+  "deletes": [
+    { "type": "cue",   "cueIdx": 1,  "reason": "filler_word" },
+    { "type": "cue",   "cueIdx": 12, "cueIdxEnd": 14, "reason": "duplicate" },
+    { "type": "range", "start": 152.4, "end": 155.1, "reason": "silence" }
+  ],
+  "textEdits": [
+    { "cueIdx": 23, "newText": "macro 是一种宏观视角", "reason": "asr_error" }
+  ]
+}
 ```
 
-### Hotwords File
+- `type:"cue"` + `cueIdx`：删该 cue（1 基序号，和 SRT 文件一致）
+- `type:"cue"` + `cueIdxEnd`：闭区间删
+- `type:"range"`：按绝对秒删（用于静音）
+- `textEdits`：cue 级**整行**文本替换（时间戳不变）；用于修 ASR 识错的专名 / 同音字
 
-Use a plain text file with one term per line:
+CLI 会硬校验越界索引、按 `transcript.words.json` 做 ±150ms 词边界吸附、加 50ms buffer + 30ms 音频 crossfade。
+
+## 热词
+
+`hotwords.txt` 每行一个词，会被当作 faster-whisper 的 `initial_prompt`：
 
 ```txt
-container_of
-offsetof
-list_entry
 GitHub
-Gist
+MCP
+container_of
+Claude Code
 ```
 
-If `--hotwords` is provided, the list is submitted to Volcengine ASR and also recorded to `1_transcribe/hotwords_used.json`.
+## 相关项目
 
-## Related Project
-
-- Skills repository: `videocut-skill`
-- Repository: [https://github.com/sunnyswag/videocut](https://github.com/sunnyswag/videocut)
+- 配套的 Cursor / Claude Code skill: `.cursor/skills/videocut/` （见仓库 SKILL.md）
+- 仓库: https://github.com/sunnyswag/videocut

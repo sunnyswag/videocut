@@ -1,72 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-import { execSync } from 'child_process';
-import { assAlignmentFromPreset, assColorFromHex, escapeAssText, normalizeSubtitleStylePreset } from './subtitle-style.js';
-import type { Utterance, DeleteSegment, Subtitle, SubtitleStylePreset } from './types.js';
-import { getPreferredEncoder } from './video.js';
-
-interface SubtitleFont {
-  family: string;
-  file?: string;
-  fontsDir?: string;
-}
-
-function isWsl(): boolean {
-  if (process.platform !== 'linux') return false;
-  return fs.existsSync('/mnt/c/Windows/Fonts');
-}
-
-function escapeFilterValue(value: string): string {
-  return value
-    .replace(/\\/g, '/')
-    .replace(/:/g, '\\:')
-    .replace(/'/g, "\\'");
-}
-
-function resolveSubtitleFont(): SubtitleFont {
-  const envFontFile = process.env.VIDEOCUT_SUBTITLE_FONT_FILE;
-  if (envFontFile && fs.existsSync(envFontFile)) {
-    return {
-      family: process.env.VIDEOCUT_SUBTITLE_FONT_NAME || path.basename(envFontFile, path.extname(envFontFile)),
-      file: envFontFile,
-      fontsDir: path.dirname(envFontFile),
-    };
-  }
-
-  let candidates: SubtitleFont[];
-  if (process.platform === 'darwin') {
-    candidates = [
-      { family: 'PingFang SC' },
-      { family: 'Hiragino Sans GB' },
-      { family: 'STHeiti' },
-      { family: 'Arial Unicode MS' },
-    ];
-  } else if (isWsl()) {
-    candidates = [
-      { family: 'Noto Sans SC', file: '/mnt/c/Windows/Fonts/NotoSansSC-VF.ttf', fontsDir: '/mnt/c/Windows/Fonts' },
-      { family: 'Microsoft YaHei', file: '/mnt/c/Windows/Fonts/msyh.ttc', fontsDir: '/mnt/c/Windows/Fonts' },
-      { family: 'Microsoft YaHei', file: '/mnt/c/Windows/Fonts/msyhbd.ttc', fontsDir: '/mnt/c/Windows/Fonts' },
-      { family: 'SimHei', file: '/mnt/c/Windows/Fonts/simhei.ttf', fontsDir: '/mnt/c/Windows/Fonts' },
-      { family: 'SimSun', file: '/mnt/c/Windows/Fonts/simsun.ttc', fontsDir: '/mnt/c/Windows/Fonts' },
-      { family: 'PingFang SC' },
-    ];
-  } else {
-    candidates = [
-      { family: 'Noto Sans SC' },
-      { family: 'Source Han Sans SC' },
-      { family: 'WenQuanYi Zen Hei' },
-      { family: 'PingFang SC' },
-    ];
-  }
-
-  for (const candidate of candidates) {
-    if (!candidate.file || fs.existsSync(candidate.file)) {
-      return candidate;
-    }
-  }
-
-  return { family: 'sans-serif' };
-}
+import type { DeleteSegment, SrtCue, Subtitle, WhisperWord } from './types.js';
 
 export function formatSrtTime(seconds: number): string {
   const safe = Math.max(0, Number(seconds) || 0);
@@ -83,115 +15,141 @@ export function generateSrt(subtitles: Subtitle[]): string {
     .join('\n');
 }
 
+function segOutputLength(seg: DeleteSegment, idx: number, renderedDurations?: number[]): number {
+  if (renderedDurations && Number.isFinite(renderedDurations[idx]) && renderedDurations[idx] > 0) {
+    return renderedDurations[idx];
+  }
+  return seg.end - seg.start;
+}
+
 function remapIntervalToKeepSegments(
   start: number,
   end: number,
-  keepSegments: DeleteSegment[]
+  keepSegments: DeleteSegment[],
+  renderedDurations?: number[]
 ): DeleteSegment[] {
   const out: DeleteSegment[] = [];
   let cumulative = 0;
-  
-  for (const seg of keepSegments) {
+
+  for (let i = 0; i < keepSegments.length; i += 1) {
+    const seg = keepSegments[i];
+    const sourceLen = seg.end - seg.start;
+    const outLen = segOutputLength(seg, i, renderedDurations);
+    const scale = sourceLen > 0 ? outLen / sourceLen : 1;
     const overlapStart = Math.max(start, seg.start);
     const overlapEnd = Math.min(end, seg.end);
     if (overlapEnd > overlapStart) {
       out.push({
-        start: cumulative + (overlapStart - seg.start),
-        end: cumulative + (overlapEnd - seg.start),
+        start: cumulative + (overlapStart - seg.start) * scale,
+        end: cumulative + (overlapEnd - seg.start) * scale,
       });
     }
-    cumulative += seg.end - seg.start;
+    cumulative += outLen;
   }
-  
+
   return out;
 }
 
-export function buildSubtitlesFromEditedOpted(
-  editedOpted: Utterance[],
-  audioOffset: number,
-  keepSegments: DeleteSegment[]
-): Subtitle[] {
-  const sourceSubs: Subtitle[] = [];
-  
-  for (const node of editedOpted) {
-    if (Array.isArray(node.words) && node.words.length > 0) {
-      const keptWords: Subtitle[] = [];
-      for (const w of node.words) {
-        if ((w.opt || node.opt || 'keep') === 'del') continue;
-        const text = (w.text || '').trim();
-        if (!text) continue;
-        keptWords.push({
-          text,
-          start: (typeof w.start_time === 'number' ? w.start_time : node.start_time || 0) / 1000 - audioOffset,
-          end: (typeof w.end_time === 'number' ? w.end_time : node.end_time || 0) / 1000 - audioOffset,
-        });
-      }
-      if (keptWords.length > 0) {
-        sourceSubs.push({
-          text: keptWords.map((w) => w.text).join(''),
-          start: keptWords[0].start,
-          end: keptWords[keptWords.length - 1].end,
-        });
-      }
-      continue;
-    }
+const MAP_TOLERANCE = 0.05;
 
-    if ((node.opt || 'keep') === 'del') continue;
-    const text = (node.text || '').trim();
-    if (!text) continue;
-    sourceSubs.push({
-      text,
-      start: (node.start_time || 0) / 1000 - audioOffset,
-      end: (node.end_time || 0) / 1000 - audioOffset,
-    });
-  }
-
-  const remapped: Subtitle[] = [];
-  for (const sub of sourceSubs) {
-    for (const seg of remapIntervalToKeepSegments(sub.start, sub.end, keepSegments)) {
-      if (seg.end - seg.start < 0.05) continue;
-      remapped.push({ text: sub.text, start: seg.start, end: seg.end });
+function mapSourceToOutput(
+  t: number,
+  keepSegments: DeleteSegment[],
+  renderedDurations?: number[]
+): number | undefined {
+  let cumulative = 0;
+  for (let i = 0; i < keepSegments.length; i += 1) {
+    const seg = keepSegments[i];
+    const sourceLen = seg.end - seg.start;
+    const outLen = segOutputLength(seg, i, renderedDurations);
+    const scale = sourceLen > 0 ? outLen / sourceLen : 1;
+    if (t >= seg.start - MAP_TOLERANCE && t <= seg.end + MAP_TOLERANCE) {
+      const clamped = Math.min(Math.max(t, seg.start), seg.end);
+      return cumulative + (clamped - seg.start) * scale;
     }
+    cumulative += outLen;
   }
-  
-  return remapped;
+  return undefined;
 }
 
-export function burnSubtitles(
-  videoPath: string,
-  srtPath: string,
-  outputPath: string,
-  subtitleStyle?: SubtitleStylePreset
-): void {
-  const encoder = getPreferredEncoder();
-  const font = resolveSubtitleFont();
-  const escapedSrtPath = escapeFilterValue(srtPath);
-  const escapedFontsDir = font.fontsDir ? escapeFilterValue(font.fontsDir) : null;
-  const stylePreset = normalizeSubtitleStylePreset(subtitleStyle);
-  const fontFamily = stylePreset.fontFamilyHint || font.family;
-  const bold = stylePreset.fontWeight >= 600 ? -1 : 0;
-  const shadow = Math.round(stylePreset.shadow * 10) / 10;
-  const style = [
-    `FontSize=${Math.round(stylePreset.fontSize * 10) / 10}`,
-    `FontName=${escapeAssText(fontFamily)}`,
-    `Bold=${bold}`,
-    `Spacing=${Math.round(stylePreset.letterSpacing * 10) / 10}`,
-    `PrimaryColour=${assColorFromHex(stylePreset.textColor)}`,
-    `OutlineColour=${assColorFromHex(stylePreset.outlineColor)}`,
-    `Outline=${Math.round(stylePreset.outlineWidth * 10) / 10}`,
-    `Shadow=${shadow}`,
-    'BorderStyle=1',
-    `Alignment=${assAlignmentFromPreset(stylePreset.alignment)}`,
-    `MarginV=${Math.round(stylePreset.bottomOffset)}`,
-  ].join(',');
-  const filterParts = [`subtitles='${escapedSrtPath}'`, 'charenc=UTF-8'];
-  if (escapedFontsDir) {
-    filterParts.push(`fontsdir='${escapedFontsDir}'`);
+interface MappedWord {
+  text: string;
+  start: number;
+  end: number;
+}
+
+function mapCueByWords(
+  cue: SrtCue,
+  cueWords: WhisperWord[],
+  keepSegments: DeleteSegment[],
+  renderedDurations?: number[]
+): Subtitle[] {
+  const survivors: MappedWord[] = [];
+  for (const w of cueWords) {
+    const mid = (w.start + w.end) / 2;
+    const outMid = mapSourceToOutput(mid, keepSegments, renderedDurations);
+    if (outMid === undefined) continue;
+    const outStart = mapSourceToOutput(Math.max(w.start, cue.start), keepSegments, renderedDurations);
+    const outEnd = mapSourceToOutput(Math.min(w.end, cue.end), keepSegments, renderedDurations);
+    if (outStart === undefined || outEnd === undefined || outEnd <= outStart) {
+      survivors.push({ text: w.text, start: outMid, end: outMid + 0.05 });
+    } else {
+      survivors.push({ text: w.text, start: outStart, end: outEnd });
+    }
   }
-  filterParts.push(`force_style='${style}'`);
-  const filter = filterParts.join(':');
-  console.log(`📝 烧录字幕使用编码器: ${encoder.label}`);
-  console.log(`🔤 烧录字幕使用字体: ${fontFamily}${font.file ? ` (${font.file})` : ''}`);
-  const cmd = `ffmpeg -y -i "file:${videoPath}" -vf "${filter}" -c:v ${encoder.name} ${encoder.args} -c:a copy "file:${outputPath}"`;
-  execSync(cmd, { stdio: 'pipe', maxBuffer: 1024 * 1024 * 16 });
+
+  if (survivors.length === 0) return [];
+
+  const groups: MappedWord[][] = [];
+  let group: MappedWord[] = [];
+  const GAP = 0.3;
+  for (const s of survivors) {
+    if (group.length > 0 && s.start - group[group.length - 1].end > GAP) {
+      groups.push(group);
+      group = [];
+    }
+    group.push(s);
+  }
+  if (group.length > 0) groups.push(group);
+
+  return groups
+    .map((g) => {
+      const text = g.map((w) => w.text).join('').trim() || cue.text;
+      return { text, start: g[0].start, end: g[g.length - 1].end };
+    })
+    .filter((s) => s.end - s.start >= 0.05);
+}
+
+export function remapSrtToKeepSegments(
+  srtCues: SrtCue[],
+  keepSegments: DeleteSegment[],
+  wordsByCue?: Map<number, WhisperWord[]>,
+  textEditedIdx?: Set<number>,
+  renderedDurations?: number[]
+): Subtitle[] {
+  const out: Subtitle[] = [];
+  for (const cue of srtCues) {
+    const mapped = remapIntervalToKeepSegments(cue.start, cue.end, keepSegments, renderedDurations);
+    if (mapped.length === 0) continue;
+
+    const cueWords = wordsByCue?.get(cue.idx) ?? [];
+    const cueFullyKept = mapped.length === 1 && mapped[0].end - mapped[0].start >= cue.end - cue.start - 0.02;
+    const cueHasTextEdit = textEditedIdx?.has(cue.idx) ?? false;
+
+    if (cueFullyKept || cueWords.length === 0 || cueHasTextEdit) {
+      for (const seg of mapped) {
+        if (seg.end - seg.start < 0.05) continue;
+        const prev = out[out.length - 1];
+        if (prev && prev.text === cue.text && Math.abs(seg.start - prev.end) < 0.05) {
+          prev.end = seg.end;
+        } else {
+          out.push({ text: cue.text, start: seg.start, end: seg.end });
+        }
+      }
+    } else {
+      const split = mapCueByWords(cue, cueWords, keepSegments, renderedDurations);
+      out.push(...split);
+    }
+  }
+  return out;
 }

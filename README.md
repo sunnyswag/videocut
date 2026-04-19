@@ -1,105 +1,86 @@
 # VideoCut
 
-A CLI toolkit and web-based review UI for cutting talking-head / podcast videos. It transcribes speech via the Volcengine ASR API, identifies filler words and mistakes with AI, and lets you visually confirm deletions in a browser before exporting the final cut.
+本地 faster-whisper 转录 + AI 粗剪 + ffmpeg 输出的口播视频剪辑工具链。适合给**「AI 粗剪 → 外部编辑器（剪映 / Premiere / DaVinci）精修」**这种工作流使用。
 
-## Features
+## 组成
 
-- **Automatic transcription** — extracts audio, uploads it, and polls the Volcengine ASR API for word-level timestamps.
-- **AI-assisted edit suggestions** — generates a readable transcript and proposes deletions (fillers, repeated words, long pauses).
-- **Web review UI** — a React-based single-page app with inline word timeline, playback controls, dark/light themes, and i18n (Chinese / English).
-- **Precise FFmpeg cutting** — merges selected delete segments, compensates for audio offset, and exports with hardware-accelerated encoding when available (NVENC / VideoToolbox).
-- **Subtitle burning** — optionally hardcodes subtitles into the output video.
+- **`videocut-cli/`** — Node CLI，spawn Python 跑 faster-whisper，ffmpeg 切视频。发布包 `@huiqinghuang/videocut-cli`。
+- **`.cursor/skills/videocut/`** — Cursor / Claude Code 的 skill 定义，把 AI 分析步骤固化下来。
 
-## Quick Start
+## 四步流程
+
+```
+1. videocut process <video> -o <BASE>
+     → BASE/inputs/source.mp4 (symlink) + BASE/work/transcript.srt + BASE/work/signals.json
+2. videocut suggest-edits <BASE>
+     → BASE/work/edits.candidates.json（机械扫出 gap / mid-cue / filler-only；可选）
+3. [AI]  读 work/transcript.srt + signals.json + candidates
+     → 写 work/edits.json + work/analysis.md（加 stutter 合并 + textEdits）
+4. videocut cut BASE/inputs/source.mp4 BASE/work/edits.json
+     → BASE/final/edited.mp4 + BASE/final/edited.srt
+```
+
+目录约定：`inputs/`（用户放 source + video_script）/ `work/`（CLI 和 LLM 的工作区）/ `final/`（成片）。
+
+AI 在 step 3 里干三件事：
+- 标出要删的 cue / 时间段（静音、填充词、口吃、重复、自我纠正、残句）
+- 修正 ASR 识错的专名 / 同音字（`textEdits` 字段，cue 级整行替换）
+- 把推理过程写到 `work/analysis.md`
+
+CLI 在 step 4 里：
+- 校验 LLM 产出的索引合法性
+- 应用 textEdits
+- 按 words JSON 做词边界吸附（±150ms）
+- ffmpeg 剪切 + 硬件编码器自动回退（NVENC / VAAPI / QSV / VideoToolbox / libx264）
+- 重映射 SRT 时间轴到剪辑后的视频（按每段实际渲染时长缩放，避免 GOP 累积 drift）
+
+## 快速开始
 
 ```bash
-# Install the CLI globally
+# 一次性安装
 npm install -g @huiqinghuang/videocut-cli
 
-# Transcribe a video
-videocut transcribe video.mp4 -o output/
+# Python 后端装到 venv（现代 Debian/Ubuntu 的 PEP 668 不让 pip 装到系统 Python）
+python3 -m venv .venv
+.venv/bin/pip install faster-whisper
+export VIDEOCUT_PYTHON="$PWD/.venv/bin/python"
 
-# Generate editable subtitle structure
-videocut generate-subtitles output/transcription.json -o output/subtitles_words.json
+# 需要 ffmpeg、ffprobe、Python 3.10+、Node 18+
+# 可选：GPU 加速（约 10× 速度，没装会自动回退 CPU）
+#   .venv/bin/pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
 
-# Generate human-readable transcript for AI analysis
-videocut generate-readable output/subtitles_words.json -o output/readable.txt
+# 跑一个视频
+videocut process my_video.mp4 -o output/demo
+# 首次会下载 ~1.5GB 模型到 ~/.cache/huggingface/
+# 产出 output/demo/{inputs,work,final}/
 
-# Apply AI-suggested edits
-videocut apply-edits output/subtitles_words.json edits.json -o output/subtitles_words_edited.json
+# 可选：生成候选骨架
+videocut suggest-edits output/demo
+# → output/demo/work/edits.candidates.json
 
-# Launch the review UI in a browser
-videocut review-server 8899 -p output/
+# （这一步由 AI 完成，见 SKILL.md 的启发式）
+# 生成 output/demo/work/edits.json
 
-# Cut the video (also available from the review UI)
-videocut cut video.mp4 delete_segments.json -o video_cut.mp4
+videocut cut output/demo/inputs/source.mp4 output/demo/work/edits.json
+# 默认输出到 output/demo/final/edited.mp4 + edited.srt
 ```
 
-## CLI Commands
+批量模式：在 Cursor / Claude Code 里说「剪辑 @videos 文件夹」，skill 会给每个视频起一个 subagent 并行跑。
 
-| Command | Description |
-|---|---|
-| `transcribe <video>` | Transcribe video via Volcengine ASR. Outputs word-level JSON. |
-| `generate-subtitles <json>` | Convert raw transcription into an editable subtitle structure. |
-| `generate-readable <subtitles>` | Produce a plain-text transcript for AI analysis. |
-| `apply-edits <subtitles> <edits>` | Merge AI edit suggestions into the subtitle file. |
-| `review-server [port]` | Start the web review UI on the given port (default 3000). |
-| `cut <video> <segments>` | Execute the final cut using FFmpeg. |
+## 文档
 
-## Development
+- [CLI README](./videocut-cli/README.md) — 命令行使用详解
+- [SKILL.md](./.cursor/skills/videocut/SKILL.md) — 完整工作流 + AI 启发式 + 批量模式
+- [edits.example.json](./.cursor/skills/videocut/edits.example.json) — LLM 产出格式示例
+- [Python 后端](./videocut-cli/python/README.md) — faster-whisper 安装与 GPU 配置
 
-```bash
-# Install dependencies
-cd videocut-cli && npm install
-cd ../videocut-ui && npm install
+## 迁移自 1.x
 
-# Build the UI (outputs to videocut-cli/static/)
-cd videocut-ui && npm run build
+1.x 版本依赖火山引擎 ASR + 浏览器审核 UI + 多级 `subtitles_words.json` / `readable.txt` / `edits.json (pathSet)` 工作流。2.0 全部废弃：
 
-# Build the CLI
-cd ../videocut-cli && npm run build
+- ASR：Volcengine → **faster-whisper 本地**，无 API 费、无轮询、无 `uguu.se` 依赖
+- AI 输入：`readable.txt` (两级索引) → **标准 SRT**
+- AI 输出：旧 `edits.json` (pathSet / textChanges / combines) → **新 `edits.json`**（只有 deletes + cue 级 textEdits；schema_version: 2）
+- UI：React 浏览器审核 → 去掉；直接在 CLI + 外部剪辑软件完成
 
-# Run the UI dev server (hot reload)
-cd videocut-ui && npm run dev
-
-# Start the backend in another terminal
-node videocut-cli/bin/videocut.js review-server 8899 -p output/
-```
-
-## Project Structure
-
-```
-videocut-skill/
-├── videocut-cli/              # CLI package (TypeScript + Commander)
-│   ├── bin/                   #   Entry script
-│   ├── src/
-│   │   ├── commands/          #   One file per CLI command
-│   │   │   ├── transcribe.ts
-│   │   │   ├── generate-subtitles.ts
-│   │   │   ├── generate-readable.ts
-│   │   │   ├── apply-edits.ts
-│   │   │   ├── review-server.ts
-│   │   │   └── cut-video.ts
-│   │   └── index.ts           #   CLI entry point
-│   └── static/                #   Compiled UI assets (generated)
-├── videocut-ui/               # Web review UI (React + Vite)
-│   └── src/
-│       ├── components/        #   React components
-│       ├── hooks/             #   Custom React hooks
-│       ├── i18n.ts            #   Internationalization (zh/en)
-│       ├── api.ts             #   API client
-│       ├── types.ts           #   Shared TypeScript types
-│       └── style.css          #   Global styles + theming
-├── .cursor/skills/            # Cursor Agent Skill definitions
-└── output/                    # Working directory for processed videos
-```
-
-## Environment Variables
-
-| Variable | Description |
-|---|---|
-| `VOLCENGINE_API_KEY` | API key for Volcengine ASR service |
-
-## License
-
-MIT
+`output/` 目录下 1.x 的项目文件**不兼容**新 CLI，需要对源视频重跑 `videocut process`。
