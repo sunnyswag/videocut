@@ -66,6 +66,73 @@ def build_initial_prompt(hotwords: list[str], limit_chars: int = 400) -> str | N
     return f"Domain terms: {joined}"
 
 
+def preload_nvidia_libs() -> list[str]:
+    """预加载 pip 装的 CUDA 库（nvidia-cublas-cu12 / nvidia-cudnn-cu12）。
+
+    这些库落在 site-packages/nvidia/*/lib 下，不在动态链接器的搜索路径里，
+    所以按 soname 的 dlopen 会失败。这里用绝对路径 + RTLD_GLOBAL 先加载一遍，
+    之后 loader 按 soname 查找时会直接命中已加载的对象，
+    调用方不必设 LD_LIBRARY_PATH。
+    """
+    import glob
+    import sysconfig
+
+    dirs: list[str] = []
+    for key in ("purelib", "platlib"):
+        base = sysconfig.get_paths().get(key)
+        if base:
+            dirs.extend(glob.glob(os.path.join(base, "nvidia", "*", "lib")))
+    dirs = sorted(dict.fromkeys(dirs))
+    if not dirs:
+        return []
+
+    pending: list[str] = []
+    for d in dirs:
+        pending.extend(sorted(glob.glob(os.path.join(d, "lib*.so*"))))
+
+    # 库之间有依赖（libcudnn_cnn → libcudnn_ops/graph），一趟装不完；
+    # 反复重试直到没有新增成功为止。
+    for _ in range(4):
+        failed = [
+            lib
+            for lib in pending
+            if not _try_dlopen(lib)
+        ]
+        if not failed or len(failed) == len(pending):
+            break
+        pending = failed
+    return dirs
+
+
+def _try_dlopen(path: str) -> bool:
+    import ctypes
+
+    try:
+        ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
+        return True
+    except OSError:
+        return False
+
+
+def pick_cuda_compute_type() -> str:
+    """按 ctranslate2 实际支持的类型挑，别硬写 float16。
+
+    Pascal（sm_6x，如 GTX 10 系）的 float16 吞吐只有 fp32 的一个零头，
+    ctranslate2 会直接把 float16 从支持列表里剔掉；此时应落到 int8_float32
+    （sm_61 有 dp4a，int8 比 float32 快，显存也省）。
+    """
+    try:
+        import ctranslate2  # type: ignore
+
+        supported = ctranslate2.get_supported_compute_types("cuda")
+    except Exception:
+        return "default"
+    for ct in ("float16", "int8_float16", "int8_float32", "float32"):
+        if ct in supported:
+            return ct
+    return "default"
+
+
 def format_srt_time(seconds: float) -> str:
     if seconds is None or seconds < 0:
         seconds = 0.0
@@ -133,12 +200,19 @@ def main() -> int:
                     return False, f"{lib}: {e}"
             return True, "ok"
 
+        if device in ("auto", "cuda"):
+            found = preload_nvidia_libs()
+            if found:
+                log(f"[whisper] 预加载 pip CUDA 库：{len(found)} 个目录")
+
         if device == "auto":
             ok, why = cuda_runtime_ok()
             if ok:
+                ct = pick_cuda_compute_type() if compute_type == "auto" else compute_type
                 try:
-                    model = load_with("cuda", compute_type)
+                    model = load_with("cuda", ct)
                     device = "cuda"
+                    compute_type = ct
                 except Exception as gpu_err:
                     log(f"[whisper] CUDA 加载失败，回退 CPU+int8: {type(gpu_err).__name__}: {str(gpu_err)[:160]}")
                     model = load_with("cpu", "int8")
@@ -154,6 +228,8 @@ def main() -> int:
                 device = "cpu"
                 compute_type = "int8"
         else:
+            if device == "cuda" and compute_type == "auto":
+                compute_type = pick_cuda_compute_type()
             model = load_with(device, compute_type)
 
         hotwords = read_hotwords(args.hotwords)

@@ -9,7 +9,8 @@
   "files": [
     "dist",
     "bin",
-    "python"
+    "python",
+    "!python/__pycache__"
   ],
   "scripts": {
     "build": "tsc",

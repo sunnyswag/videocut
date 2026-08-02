@@ -15,3 +15,7 @@ macro_notes/
 
 # test scripts
 videocut-cli/test_*.mjs
+
+# python 构建垃圾
+__pycache__/
+*.pyc
