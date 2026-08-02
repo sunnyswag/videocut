@@ -7,7 +7,11 @@ output/
 videos/
 macro_notes/
 .trae/
-.claude/
+.venv/
+
+# .claude/ 只跟踪 skills 软链（指向 .agents/skills），本地 settings 不提交
+.claude/*
+!.claude/skills/
 
 # test scripts
 videocut-cli/test_*.mjs
